@@ -1,7 +1,7 @@
 import streamlit as st
 import openai
 import tiktoken
-import streamlit_authenticator as stauth
+from streamlit_oauth import OAuth2Component
 from datetime import datetime, timedelta
 
 # === Secrets ===
@@ -10,6 +10,7 @@ GOOGLE_CLIENT_SECRET = st.secrets["GOOGLE_CLIENT_SECRET"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]
 COOKIE_KEY = st.secrets["COOKIE_KEY"]
+REDIRECT_URI = "https://sqlomptimizer.streamlit.app"
 
 # === OAuth Configuration ===
 oauth_config = {
@@ -19,27 +20,39 @@ oauth_config = {
     "redirect_uri": "https://sqlomptimizer.streamlit.app"
 }
 
-# === Authenticator Setup ===
-credentials = {"usernames": {}}
-
-authenticator = stauth.Authenticate(
-    credentials=credentials,
-    cookie_name="sqloptimizer",
+# === Google OAuth Setup ===
+oauth = OAuth2Component(
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
+    authorize_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
+    token_endpoint="https://oauth2.googleapis.com/token",
+    revoke_endpoint="https://oauth2.googleapis.com/revoke",
+    redirect_uri=REDIRECT_URI,
+    scope="openid email profile",
     key=COOKIE_KEY,
-    oauth=oauth_config
 )
 
-authenticator.login()
+# === Show Google Login Button ===
+result = oauth.authorize_button("Login with Google")
+if result and "token" in result:
+    token = result["token"]
+    user_info = oauth.get_user_info(token, user_info_endpoint="https://openidconnect.googleapis.com/v1/userinfo")
 
-# === Authentication Check ===
-if not st.session_state["authentication_status"]:
-    st.warning("Please log in with Google to continue.")
+    email = user_info["email"]
+    name = user_info.get("name", email.split("@")[0])
+else:
     st.stop()
 
-# === Identify User ===
-email = st.session_state["email"]
-name = st.session_state["name"]
+# === Authenticated UI ===
+st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
+st.success(f"👋 Welcome {name} ({email})")
+
 is_admin = email in ADMIN_EMAILS
+
+if is_admin:
+    st.sidebar.success("👑 Admin Account (Unlimited)")
+else:
+    st.sidebar.info("👤 Standard Account")
 
 # === Page Setup ===
 st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
