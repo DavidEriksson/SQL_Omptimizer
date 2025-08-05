@@ -1,51 +1,55 @@
 import ***REMOVED*** as st
 import ***REMOVED***
-import ***REMOVED***  # to estimate token usage
-
+import ***REMOVED***
 from datetime import datetime, timedelta
 
-# Initialize session state
+# === Session state setup ===
 if "query_count" not in st.session_state:
     st.session_state.query_count = 0
     st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
 
-# Show usage
-st.sidebar.markdown(f"🔢 Queries used: **{st.session_state.query_count}/5**")
-
-# Reset logic
+# === Reset after 24h ===
 if datetime.now() >= st.session_state.query_reset_time:
     st.session_state.query_count = 0
     st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
 
-client = ***REMOVED***.OpenAI()
+# === Sidebar display ===
+st.sidebar.markdown("### 🔒 Usage Limit")
+st.sidebar.markdown(f"Queries used: **{st.session_state.query_count}/5**")
+reset_in = st.session_state.query_reset_time - datetime.now()
+st.sidebar.caption(f"Resets in: {reset_in.seconds // 60} min")
 
+# === Streamlit app setup ===
+client = ***REMOVED***.OpenAI()
 st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
 st.title("SQL Optimizer")
-
-
 st.markdown("---")
 
+# === User input ===
 st.subheader("Paste your SQL query")
 sql_query = st.text_area("SQL Code", height=200, placeholder="Paste SQL here...")
-
 task = st.selectbox("What do you want to do?", ["Explain", "Detect Issues", "Optimize", "Test"])
 
 model = "gpt-4o-mini"
 temperature = 0.3
 max_tokens = 1500
 
-# Token estimation
+# === Token estimation function ===
 def estimate_tokens(text):
     enc = ***REMOVED***.encoding_for_model(model)
     return len(enc.encode(text))
 
+# === Run Button ===
 if st.button("Run"):
-      if st.session_state.query_count >= 5:
-         st.error("❌ Query limit reached. Please try again later.")
-      elif not sql_query.strip():
-        st.error("Please enter a SQL query.")
-      else:
-        # Prompt building
+    if not sql_query.strip():
+        st.error("❌ Please enter a SQL query.")
+    elif st.session_state.query_count >= 5:
+        st.error("❌ Query limit reached. Please try again later.")
+    else:
+        # ✅ Count before OpenAI call
+        st.session_state.query_count += 1
+
+        # === Build prompt ===
         if task == "Explain":
             prompt = f"""
 You are an expert SQL instructor.
@@ -105,6 +109,7 @@ SQL Query:
 {sql_query}
 """
 
+        # === OpenAI request ===
         with st.spinner("🔍 Analyzing your SQL..."):
             try:
                 token_estimate = estimate_tokens(prompt)
@@ -119,7 +124,6 @@ SQL Query:
                 st.markdown("### Result")
                 st.markdown(reply)
                 st.caption(f"🔢 Estimated tokens: {token_estimate} • Model: {model}")
-
                 st.download_button("📋 Copy Result", reply, file_name="sql_analysis.txt")
 
             except Exception as e:
