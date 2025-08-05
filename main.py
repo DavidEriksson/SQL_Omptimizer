@@ -20,8 +20,10 @@ oauth_config = {
 }
 
 # === Authenticator Setup ===
+credentials = {"usernames": {}}
+
 authenticator = stauth.Authenticate(
-    credentials={},  # No local usernames
+    credentials=credentials,
     cookie_name="sqloptimizer",
     key=COOKIE_KEY,
     oauth=oauth_config
