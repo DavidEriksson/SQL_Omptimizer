@@ -22,8 +22,10 @@ oauth_config = {
     "redirect_uri": "https://sqlomptimizer.streamlit.app/"  # or http://localhost:8501
 }
 
+credentials = {"usernames": {}}
+
 authenticator = stauth.Authenticate(
-    credentials={"usernames": {}},
+    credentials=credentials,
     cookie_name="sqloptimizer",
     key=COOKIE_KEY,
     oauth=oauth_config
@@ -37,8 +39,8 @@ if not st.session_state["authentication_status"]:
     st.stop()
 
 # === Identify user ===
-email = st.session_state["email"]
 name = st.session_state["name"]
+email = st.session_state["email"]
 is_admin = email in ADMIN_EMAILS
 
 # === UI Greeting ===
