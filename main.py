@@ -24,7 +24,7 @@ oauth = OAuth2Component(
 token = oauth.authorize_button(
     name="Login with Google",
     redirect_uri=REDIRECT_URL,
-    scope = "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile",
+    scope="openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile",
     key=COOKIE_KEY
 )
 
@@ -43,66 +43,77 @@ if token and "access_token" in token:
         st.error("Failed to retrieve user email from Google.")
         st.stop()
 
-    is_admin = email in ADMIN_EMAILS
+    st.session_state.email = email
+    st.session_state.name = name
+    st.rerun()
 
-    # === UI Setup ===
-    st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
-    st.title("SQL Optimizer")
-    st.success(f"👋 Welcome {name} ({email})")
-    if is_admin:
-        st.sidebar.success("👑 Admin Account (Unlimited)")
+elif "email" not in st.session_state:
+    st.info("Please click 'Login with Google' to sign in and continue.")
+    st.stop()
+
+# === Continue with logged-in user ===
+email = st.session_state.email
+name = st.session_state.name
+is_admin = email in ADMIN_EMAILS
+
+# === UI Setup ===
+st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
+st.title("SQL Optimizer")
+st.success(f"👋 Welcome {name} ({email})")
+if is_admin:
+    st.sidebar.success("👑 Admin Account (Unlimited)")
+else:
+    st.sidebar.info("👤 Standard Account")
+
+# === Query Limit Setup ===
+if "query_count" not in st.session_state:
+    st.session_state.query_count = 0
+    st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
+
+if datetime.now() >= st.session_state.query_reset_time:
+    st.session_state.query_count = 0
+    st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
+
+if not is_admin:
+    st.sidebar.markdown("### 🔒 Usage Limit")
+    st.sidebar.markdown(f"Queries used: **{st.session_state.query_count}/5**")
+    reset_in = st.session_state.query_reset_time - datetime.now()
+    st.sidebar.caption(f"Resets in: {reset_in.seconds // 3600}h {(reset_in.seconds % 3600) // 60}m")
+
+# === User Input ===
+st.markdown("---")
+st.subheader("Paste your SQL query")
+sql_query = st.text_area("SQL Code", height=200, placeholder="Paste SQL here...")
+task = st.selectbox("What do you want to do?", ["Explain", "Detect Issues", "Optimize", "Test"])
+model = "gpt-4o-mini"
+temperature = 0.3
+max_tokens = 1500
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
+
+# === Token Counter ===
+def estimate_tokens(text):
+    enc = tiktoken.encoding_for_model(model)
+    return len(enc.encode(text))
+
+if "run_analysis" not in st.session_state:
+    st.session_state.run_analysis = False
+
+# === Run Button ===
+if st.button("Run"):
+    if not sql_query.strip():
+        st.error("❌ Please enter a SQL query.")
+    elif not is_admin and st.session_state.query_count >= 5:
+        st.error("❌ Query limit reached. Please wait for reset.")
     else:
-        st.sidebar.info("👤 Standard Account")
+        if not is_admin:
+            st.session_state.query_count += 1
+        st.session_state.run_analysis = True
+        st.rerun()
 
-    # === Query Limit Setup ===
-    if "query_count" not in st.session_state:
-        st.session_state.query_count = 0
-        st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
-
-    if datetime.now() >= st.session_state.query_reset_time:
-        st.session_state.query_count = 0
-        st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
-
-    if not is_admin:
-        st.sidebar.markdown("### 🔒 Usage Limit")
-        st.sidebar.markdown(f"Queries used: **{st.session_state.query_count}/5**")
-        reset_in = st.session_state.query_reset_time - datetime.now()
-        st.sidebar.caption(f"Resets in: {reset_in.seconds // 3600}h {(reset_in.seconds % 3600) // 60}m")
-
-    # === User Input ===
-    st.markdown("---")
-    st.subheader("Paste your SQL query")
-    sql_query = st.text_area("SQL Code", height=200, placeholder="Paste SQL here...")
-    task = st.selectbox("What do you want to do?", ["Explain", "Detect Issues", "Optimize", "Test"])
-    model = "gpt-4o-mini"
-    temperature = 0.3
-    max_tokens = 1500
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
-
-    # === Token Counter ===
-    def estimate_tokens(text):
-        enc = tiktoken.encoding_for_model(model)
-        return len(enc.encode(text))
-
-    if "run_analysis" not in st.session_state:
-        st.session_state.run_analysis = False
-
-    # === Run Button ===
-    if st.button("Run"):
-        if not sql_query.strip():
-            st.error("❌ Please enter a SQL query.")
-        elif not is_admin and st.session_state.query_count >= 5:
-            st.error("❌ Query limit reached. Please wait for reset.")
-        else:
-            if not is_admin:
-                st.session_state.query_count += 1
-            st.session_state.run_analysis = True
-            st.rerun()
-
-    # === Prompt Builder + GPT Logic ===
-    if st.session_state.run_analysis:
-        prompt_templates = {
-            "Explain": f"""
+# === Prompt Builder + GPT Logic ===
+if st.session_state.run_analysis:
+    prompt_templates = {
+        "Explain": f"""
 You are an expert SQL instructor.
 
 Explain this SQL query step-by-step, including:
@@ -116,7 +127,7 @@ Don't talk like an AI bot.
 SQL Query:
 {sql_query}
 """,
-            "Detect Issues": f"""
+        "Detect Issues": f"""
 You are a senior SQL code reviewer.
 
 Analyze the following SQL query and list:
@@ -130,7 +141,7 @@ Don't talk like an AI bot.
 SQL Query:
 {sql_query}
 """,
-            "Optimize": f"""
+        "Optimize": f"""
 You are a SQL performance expert.
 
 Review the query below and:
@@ -143,7 +154,7 @@ Don't talk like an AI bot.
 SQL Query:
 {sql_query}
 """,
-            "Test": f"""
+        "Test": f"""
 You are a SQL testing expert.
 
 Generate:
@@ -156,29 +167,26 @@ Don't talk like an AI bot.
 SQL Query:
 {sql_query}
 """
-        }
+    }
 
-        prompt = prompt_templates[task]
+    prompt = prompt_templates[task]
 
-        with st.spinner("🔍 Analyzing your SQL..."):
-            try:
-                token_estimate = estimate_tokens(prompt)
-                response = client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=temperature,
-                    max_tokens=max_tokens
-                )
-                reply = response.choices[0].message.content
-                st.success("✅ Analysis complete!")
-                st.markdown("### Result")
-                st.markdown(reply)
-                st.caption(f"🔢 Estimated tokens: {token_estimate} • Model: {model}")
-                st.download_button("📋 Copy Result", reply, file_name="sql_analysis.txt")
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
+    with st.spinner("🔍 Analyzing your SQL..."):
+        try:
+            token_estimate = estimate_tokens(prompt)
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+            reply = response.choices[0].message.content
+            st.success("✅ Analysis complete!")
+            st.markdown("### Result")
+            st.markdown(reply)
+            st.caption(f"🔢 Estimated tokens: {token_estimate} • Model: {model}")
+            st.download_button("📋 Copy Result", reply, file_name="sql_analysis.txt")
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
 
-        st.session_state.run_analysis = False
-
-else:
-    st.info("Please click 'Login with Google' to sign in and continue.")
+    st.session_state.run_analysis = False
