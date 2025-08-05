@@ -17,7 +17,9 @@ if datetime.now() >= st.session_state.query_reset_time:
 st.sidebar.markdown("### 🔒 Usage Limit")
 st.sidebar.markdown(f"Queries used: **{st.session_state.query_count}/5**")
 reset_in = st.session_state.query_reset_time - datetime.now()
-st.sidebar.caption(f"Resets in: {reset_in.seconds // 60} min")
+hours = reset_in.seconds // 3600
+minutes = (reset_in.seconds % 3600) // 60
+st.sidebar.caption(f"Resets in: {hours}h {minutes}m")
 
 # === Streamlit app setup ===
 client = ***REMOVED***.OpenAI()
