@@ -1,60 +1,99 @@
 import ***REMOVED*** as st
 import ***REMOVED***
 import ***REMOVED***
+import ***REMOVED***_authenticator as stauth
 from datetime import datetime, timedelta
 
-# === Session state setup ===
+# === Secrets ===
+GOOGLE_CLIENT_ID = st.secrets["google_client_id"]
+GOOGLE_CLIENT_SECRET = st.secrets["google_client_secret"]
+ADMIN_EMAILS = ["daviderikssoon@gmail.com"]  # Add your Google account here
+
+# === Authenticator Setup ===
+oauth_config = {
+    "provider": "google",
+    "client_id": GOOGLE_CLIENT_ID,
+    "client_secret": GOOGLE_CLIENT_SECRET,
+    "redirect_uri": "https://sqlomptimizer.***REMOVED***.app/"  # or http://localhost:8501
+}
+
+authenticator = stauth.Authenticate(
+    credentials={},
+    cookie_name="sqloptimizer",
+    key="secure_random_key_123",  # change to a secure value
+    oauth=oauth_config
+)
+
+authenticator.login()
+
+# === Check login ===
+if not st.session_state["authentication_status"]:
+    st.warning("Please log in with Google to continue.")
+    st.stop()
+
+# === Identify user ===
+email = st.session_state["email"]
+name = st.session_state["name"]
+is_admin = email in ADMIN_EMAILS
+
+# === UI Greeting ===
+st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
+st.title("SQL Optimizer")
+st.success(f"👋 Welcome {name} ({email})")
+if is_admin:
+    st.sidebar.success("👑 Admin Account (Unlimited)")
+else:
+    st.sidebar.info("👤 Standard Account")
+
+# === Query Limit Setup ===
 if "query_count" not in st.session_state:
     st.session_state.query_count = 0
     st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
-if "run_analysis" not in st.session_state:
-    st.session_state.run_analysis = False
 
-# === Reset after 24h ===
 if datetime.now() >= st.session_state.query_reset_time:
     st.session_state.query_count = 0
     st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
 
-# === Sidebar display ===
-st.sidebar.markdown("### 🔒 Usage Limit")
-st.sidebar.markdown(f"Queries used: **{st.session_state.query_count}/5**")
-reset_in = st.session_state.query_reset_time - datetime.now()
-hours = reset_in.seconds // 3600
-minutes = (reset_in.seconds % 3600) // 60
-st.sidebar.caption(f"Resets in: {hours}h {minutes}m")
+# === Sidebar Display ===
+if not is_admin:
+    st.sidebar.markdown("### 🔒 Usage Limit")
+    st.sidebar.markdown(f"Queries used: **{st.session_state.query_count}/5**")
+    reset_in = st.session_state.query_reset_time - datetime.now()
+    hours = reset_in.seconds // 3600
+    minutes = (reset_in.seconds % 3600) // 60
+    st.sidebar.caption(f"Resets in: {hours}h {minutes}m")
 
-# === Streamlit app setup ===
-client = ***REMOVED***.OpenAI()
-st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
-st.title("SQL Optimizer")
+# === User Input ===
 st.markdown("---")
-
-# === User input ===
 st.subheader("Paste your SQL query")
 sql_query = st.text_area("SQL Code", height=200, placeholder="Paste SQL here...")
 task = st.selectbox("What do you want to do?", ["Explain", "Detect Issues", "Optimize", "Test"])
-
 model = "gpt-4o-mini"
 temperature = 0.3
 max_tokens = 1500
+client = ***REMOVED***.OpenAI()
 
-# === Token estimation function ===
+# === Token Counter ===
 def estimate_tokens(text):
     enc = ***REMOVED***.encoding_for_model(model)
     return len(enc.encode(text))
+
+if "run_analysis" not in st.session_state:
+    st.session_state.run_analysis = False
 
 # === Run Button ===
 if st.button("Run"):
     if not sql_query.strip():
         st.error("❌ Please enter a SQL query.")
-    elif st.session_state.query_count >= 5:
-        st.error("❌ Query limit reached. Please try again later.")
+    elif not is_admin and st.session_state.query_count >= 5:
+        st.error("❌ Query limit reached. Please wait for reset.")
     else:
-        st.session_state.query_count += 1
+        if not is_admin:
+            st.session_state.query_count += 1
         st.session_state.run_analysis = True
         st.rerun()
 
-# === Run the analysis after rerun ===
+# === Prompt Builder + GPT Logic ===
 if st.session_state.run_analysis:
     if task == "Explain":
         prompt = f"""
@@ -133,4 +172,4 @@ SQL Query:
         except Exception as e:
             st.error(f"Error: {str(e)}")
 
-    st.session_state.run_analysis = False  # Reset flag
+    st.session_state.run_analysis = False
