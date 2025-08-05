@@ -33,9 +33,18 @@ if token:
     import requests
 
     headers = {"Authorization": f"Bearer {token['access_token']}"}
-    user_info = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers=headers).json()
+    # === Get user info after login ===
+if token and "access_token" in token:
+    user_info = oauth.get_user_info(
+        token,
+        user_info_endpoint="https://www.googleapis.com/oauth2/v3/userinfo"
+    )
     email = user_info.get("email")
-    name = user_info.get("name")
+    name = user_info.get("name", "User")
+else:
+    st.error("Inloggningen misslyckades. Kunde inte hämta åtkomsttoken.")
+    st.stop()
+
 
     if not email:
         st.error("Failed to retrieve user email from Google.")
