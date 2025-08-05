@@ -1,7 +1,7 @@
 import streamlit as st
 import openai
 import tiktoken
-import streamlit_authenticator as stauth
+from streamlit_extras.oauth2 import with_google_oauth2
 from datetime import datetime, timedelta
 
 # === Secrets ===
@@ -10,37 +10,29 @@ GOOGLE_CLIENT_SECRET = st.secrets["GOOGLE_CLIENT_SECRET"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]
 COOKIE_KEY = st.secrets["COOKIE_KEY"]
+REDIRECT_URI = "https://sqlomptimizer.streamlit.app"
 
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 
-# === Authenticator Setup ===
-oauth_config = {
-    "provider": "google",
-    "client_id": GOOGLE_CLIENT_ID,
-    "client_secret": GOOGLE_CLIENT_SECRET,
-    "redirect_uri": "https://sqlomptimizer.streamlit.app/"  # or http://localhost:8501
-}
-
-credentials = {"usernames": {}}
-
-authenticator = stauth.Authenticate(
-    credentials=credentials,
-    cookie_name="sqloptimizer",
-    key=COOKIE_KEY,
-    oauth=oauth_config
+@with_google_oauth2(
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
+    redirect_uri=REDIRECT_URI,
+    cookie_key=COOKIE_KEY,
+    email_domains=["gmail.com"]
 )
+def login(email, name):
+    return email, name
 
-authenticator.login()
+email, name = login()
 
-# === Check login ===
-if not st.session_state["authentication_status"]:
-    st.warning("Please log in with Google to continue.")
+if not email:
     st.stop()
 
-# === Identify user ===
-name = st.session_state["name"]
-email = st.session_state["email"]
+# User is logged in
+st.success(f"👋 Welcome {name} ({email})")
+
 is_admin = email in ADMIN_EMAILS
 
 # === UI Greeting ===
