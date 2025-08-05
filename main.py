@@ -26,7 +26,6 @@ oauth = OAuth2Component(
     client_secret=GOOGLE_CLIENT_SECRET,
     authorize_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
     token_endpoint="https://oauth2.googleapis.com/token",
-    revoke_endpoint="https://oauth2.googleapis.com/revoke",
     redirect_uri=REDIRECT_URI,
     scope="openid email profile",
     key=COOKIE_KEY,
