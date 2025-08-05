@@ -24,7 +24,7 @@ oauth = OAuth2Component(
 token = oauth.authorize_button(
     name="Login with Google",
     redirect_uri=REDIRECT_URL,
-    scope=["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"]
+    scope=["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"],
     key=COOKIE_KEY
 )
 
