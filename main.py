@@ -52,7 +52,7 @@ if st.button("Run"):
     else:
         st.session_state.query_count += 1
         st.session_state.run_analysis = True
-        st.experimental_rerun()
+        st.rerun()
 
 # === Run the analysis after rerun ===
 if st.session_state.run_analysis:
