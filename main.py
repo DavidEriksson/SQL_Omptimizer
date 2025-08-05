@@ -2,6 +2,21 @@ import ***REMOVED*** as st
 import ***REMOVED***
 import ***REMOVED***  # to estimate token usage
 
+from datetime import datetime, timedelta
+
+# Initialize session state
+if "query_count" not in st.session_state:
+    st.session_state.query_count = 0
+    st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
+
+# Show usage
+st.sidebar.markdown(f"🔢 Queries used: **{st.session_state.query_count}/5**")
+
+# Reset logic
+if datetime.now() >= st.session_state.query_reset_time:
+    st.session_state.query_count = 0
+    st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
+
 client = ***REMOVED***.OpenAI()
 
 st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
@@ -10,7 +25,7 @@ st.title("SQL Optimizer")
 
 st.markdown("---")
 
-st.subheader("📥 Paste your SQL query")
+st.subheader("Paste your SQL query")
 sql_query = st.text_area("SQL Code", height=200, placeholder="Paste SQL here...")
 
 task = st.selectbox("What do you want to do?", ["Explain", "Detect Issues", "Optimize", "Test"])
@@ -25,9 +40,11 @@ def estimate_tokens(text):
     return len(enc.encode(text))
 
 if st.button("Run"):
-    if not sql_query.strip():
+      if st.session_state.query_count >= 5:
+         st.error("❌ Query limit reached. Please try again later.")
+      elif not sql_query.strip():
         st.error("Please enter a SQL query.")
-    else:
+      else:
         # Prompt building
         if task == "Explain":
             prompt = f"""
