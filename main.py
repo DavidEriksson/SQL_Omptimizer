@@ -5,9 +5,14 @@ import streamlit_authenticator as stauth
 from datetime import datetime, timedelta
 
 # === Secrets ===
-GOOGLE_CLIENT_ID = st.secrets["google_client_id"]
-GOOGLE_CLIENT_SECRET = st.secrets["google_client_secret"]
-ADMIN_EMAILS = ["daviderikssoon@gmail.com"]  # Add your Google account here
+GOOGLE_CLIENT_ID = st.secrets["GOOGLE_CLIENT_ID"]
+GOOGLE_CLIENT_SECRET = st.secrets["GOOGLE_CLIENT_SECRET"]
+OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]
+COOKIE_KEY = st.secrets["COOKIE_KEY"]
+
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
+
 
 # === Authenticator Setup ===
 oauth_config = {
@@ -20,7 +25,7 @@ oauth_config = {
 authenticator = stauth.Authenticate(
     credentials={},
     cookie_name="sqloptimizer",
-    key="secure_random_key_123",  # change to a secure value
+    key=COOKIE_KEY,
     oauth=oauth_config
 )
 
