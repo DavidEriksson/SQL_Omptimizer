@@ -1,59 +1,34 @@
 import streamlit as st
-from streamlit_oauth import OAuth2Component
-from datetime import datetime, timedelta
+from streamlit_extras.oauth2 import with_google_oauth2
 import openai
 import tiktoken
+from datetime import datetime, timedelta
 
-# === Streamlit secrets ===
+# === Secrets ===
 GOOGLE_CLIENT_ID = st.secrets["GOOGLE_CLIENT_ID"]
 GOOGLE_CLIENT_SECRET = st.secrets["GOOGLE_CLIENT_SECRET"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 COOKIE_KEY = st.secrets["COOKIE_KEY"]
 ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]
-REDIRECT_URL = "https://sqlomptimizer.streamlit.app"
+REDIRECT_URI = "https://sqlomptimizer.streamlit.app"
 
-# === OAuth2 Setup ===
-oauth = OAuth2Component(
+# === Google Login ===
+@with_google_oauth2(
     client_id=GOOGLE_CLIENT_ID,
     client_secret=GOOGLE_CLIENT_SECRET,
-    authorize_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
-    token_endpoint="https://oauth2.googleapis.com/token"
+    redirect_uri=REDIRECT_URI,
+    cookie_key=COOKIE_KEY,
+    email_domains=None  # sätt t.ex. till ["gmail.com"] om du vill begränsa
 )
+def login(email, name):
+    return email, name
 
-# === Show login button ===
-token = oauth.authorize_button(
-    name="Login with Google",
-    redirect_uri=REDIRECT_URL,
-    scope="openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile",
-    key=COOKIE_KEY
-)
+email, name = login()
 
-# === Authenticated ===
-if token and "access_token" in token:
-    import requests
-    headers = {"Authorization": f"Bearer {token['access_token']}"}
-    user_info = oauth.get_user_info(
-        token,
-        user_info_endpoint="https://openidconnect.googleapis.com/v1/userinfo"
-    )
-    email = user_info.get("email")
-    name = user_info.get("name")
-
-    if not email:
-        st.error("Failed to retrieve user email from Google.")
-        st.stop()
-
-    st.session_state.email = email
-    st.session_state.name = name
-    st.rerun()
-
-elif "email" not in st.session_state:
-    st.info("Please click 'Login with Google' to sign in and continue.")
+if not email:
     st.stop()
 
-# === Continue with logged-in user ===
-email = st.session_state.email
-name = st.session_state.name
+# === Admin Logic ===
 is_admin = email in ADMIN_EMAILS
 
 # === UI Setup ===
@@ -78,7 +53,9 @@ if not is_admin:
     st.sidebar.markdown("### 🔒 Usage Limit")
     st.sidebar.markdown(f"Queries used: **{st.session_state.query_count}/5**")
     reset_in = st.session_state.query_reset_time - datetime.now()
-    st.sidebar.caption(f"Resets in: {reset_in.seconds // 3600}h {(reset_in.seconds % 3600) // 60}m")
+    hours = reset_in.seconds // 3600
+    minutes = (reset_in.seconds % 3600) // 60
+    st.sidebar.caption(f"Resets in: {hours}h {minutes}m")
 
 # === User Input ===
 st.markdown("---")

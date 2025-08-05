@@ -1,5 +1,5 @@
 streamlit
 openai
 tiktoken
-streamlit_oauth
+streamlit-extras
 requests
