@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 if "query_count" not in st.session_state:
     st.session_state.query_count = 0
     st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
+if "run_analysis" not in st.session_state:
+    st.session_state.run_analysis = False
 
 # === Reset after 24h ===
 if datetime.now() >= st.session_state.query_reset_time:
@@ -48,12 +50,14 @@ if st.button("Run"):
     elif st.session_state.query_count >= 5:
         st.error("❌ Query limit reached. Please try again later.")
     else:
-        # ✅ Count before OpenAI call
         st.session_state.query_count += 1
+        st.session_state.run_analysis = True
+        st.experimental_rerun()
 
-        # === Build prompt ===
-        if task == "Explain":
-            prompt = f"""
+# === Run the analysis after rerun ===
+if st.session_state.run_analysis:
+    if task == "Explain":
+        prompt = f"""
 You are an expert SQL instructor.
 
 Explain this SQL query step-by-step, including:
@@ -67,8 +71,8 @@ Don't talk like an AI bot.
 SQL Query:
 {sql_query}
 """
-        elif task == "Detect Issues":
-            prompt = f"""
+    elif task == "Detect Issues":
+        prompt = f"""
 You are a senior SQL code reviewer.
 
 Analyze the following SQL query and list:
@@ -82,8 +86,8 @@ Don't talk like an AI bot.
 SQL Query:
 {sql_query}
 """
-        elif task == "Optimize":
-            prompt = f"""
+    elif task == "Optimize":
+        prompt = f"""
 You are a SQL performance expert.
 
 Review the query below and:
@@ -96,8 +100,8 @@ Don't talk like an AI bot.
 SQL Query:
 {sql_query}
 """
-        elif task == "Test":
-            prompt = f"""
+    elif task == "Test":
+        prompt = f"""
 You are a SQL testing expert.
 
 Generate:
@@ -111,22 +115,22 @@ SQL Query:
 {sql_query}
 """
 
-        # === OpenAI request ===
-        with st.spinner("🔍 Analyzing your SQL..."):
-            try:
-                token_estimate = estimate_tokens(prompt)
-                response = client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=temperature,
-                    max_tokens=max_tokens
-                )
-                reply = response.choices[0].message.content
-                st.success("✅ Analysis complete!")
-                st.markdown("### Result")
-                st.markdown(reply)
-                st.caption(f"🔢 Estimated tokens: {token_estimate} • Model: {model}")
-                st.download_button("📋 Copy Result", reply, file_name="sql_analysis.txt")
+    with st.spinner("🔍 Analyzing your SQL..."):
+        try:
+            token_estimate = estimate_tokens(prompt)
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+            reply = response.choices[0].message.content
+            st.success("✅ Analysis complete!")
+            st.markdown("### Result")
+            st.markdown(reply)
+            st.caption(f"🔢 Estimated tokens: {token_estimate} • Model: {model}")
+            st.download_button("📋 Copy Result", reply, file_name="sql_analysis.txt")
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
 
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
+    st.session_state.run_analysis = False  # Reset flag
