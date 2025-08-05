@@ -1,4 +1,4 @@
 streamlit
 openai
 tiktoken
-streamlit-extras
+streamlit_authenticator
