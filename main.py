@@ -10,7 +10,7 @@ GOOGLE_CLIENT_SECRET = st.secrets["GOOGLE_CLIENT_SECRET"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 COOKIE_KEY = st.secrets["COOKIE_KEY"]
 ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]
-REDIRECT_URL = "https://sqlomptimizer.streamlit.app"
+REDIRECT_URL = "https://sqloptimizer.streamlit.app"
 
 # === OAuth2 Setup ===
 oauth = OAuth2Component(
