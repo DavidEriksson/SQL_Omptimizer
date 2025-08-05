@@ -12,13 +12,7 @@ ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]
 COOKIE_KEY = st.secrets["COOKIE_KEY"]
 REDIRECT_URI = "https://sqlomptimizer.streamlit.app"
 
-# === OAuth Configuration ===
-oauth_config = {
-    "provider": "google",
-    "client_id": GOOGLE_CLIENT_ID,
-    "client_secret": GOOGLE_CLIENT_SECRET,
-    "redirect_uri": "https://sqlomptimizer.streamlit.app"
-}
+
 
 # === Google OAuth Setup ===
 oauth = OAuth2Component(
@@ -26,27 +20,32 @@ oauth = OAuth2Component(
     client_secret=GOOGLE_CLIENT_SECRET,
     authorize_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
     token_endpoint="https://oauth2.googleapis.com/token",
-    redirect_uri=REDIRECT_URI,
-    scope="openid email profile",
-    key=COOKIE_KEY,
+    scope="https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile",
+    extras_params={"access_type": "offline"},
+    cookie_key=COOKIE_KEY,
 )
 
-# === Show Google Login Button ===
-result = oauth.authorize_button("Login with Google")
-if result and "token" in result:
-    token = result["token"]
-    user_info = oauth.get_user_info(token, user_info_endpoint="https://openidconnect.googleapis.com/v1/userinfo")
+# === Login Button ===
+token = oauth.authorize_button(
+    name="Login with Google",
+    icon="🌐",
+    redirect_uri="https://sqlomptimizer.streamlit.app",
+)
 
-    email = user_info["email"]
-    name = user_info.get("name", email.split("@")[0])
+# === Get user info after login ===
+if token:
+    user_info = oauth.get_user_info(token, user_info_endpoint="https://www.googleapis.com/oauth2/v3/userinfo")
+    email = user_info.get("email")
+    name = user_info.get("name")
 else:
     st.stop()
 
-# === Authenticated UI ===
-st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
-st.success(f"👋 Welcome {name} ({email})")
-
+# === Authenticated! ===
 is_admin = email in ADMIN_EMAILS
+
+st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
+st.title("SQL Optimizer")
+st.success(f"👋 Welcome {name} ({email})")
 
 if is_admin:
     st.sidebar.success("👑 Admin Account (Unlimited)")
