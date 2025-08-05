@@ -1,5 +1,5 @@
 streamlit
 openai
 tiktoken
-streamlit-extras
+streamlit-extras>=0.3.4
 requests
