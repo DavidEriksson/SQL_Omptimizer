@@ -70,7 +70,7 @@ task = st.selectbox("What do you want to do?", ["Explain", "Detect Issues", "Opt
 model = "gpt-4o-mini"
 temperature = 0.3
 max_tokens = 1500
-client = openai.OpenAI()
+
 
 # === Token Counter ===
 def estimate_tokens(text):
