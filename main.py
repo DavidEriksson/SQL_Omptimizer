@@ -1,7 +1,7 @@
-import ***REMOVED*** as st
-import ***REMOVED***
-import ***REMOVED***
-import ***REMOVED***_authenticator as stauth
+import streamlit as st
+import openai
+import tiktoken
+import streamlit_authenticator as stauth
 from datetime import datetime, timedelta
 
 # === Secrets ===
@@ -14,7 +14,7 @@ oauth_config = {
     "provider": "google",
     "client_id": GOOGLE_CLIENT_ID,
     "client_secret": GOOGLE_CLIENT_SECRET,
-    "redirect_uri": "https://sqlomptimizer.***REMOVED***.app/"  # or http://localhost:8501
+    "redirect_uri": "https://sqlomptimizer.streamlit.app/"  # or http://localhost:8501
 }
 
 authenticator = stauth.Authenticate(
@@ -71,11 +71,11 @@ task = st.selectbox("What do you want to do?", ["Explain", "Detect Issues", "Opt
 model = "gpt-4o-mini"
 temperature = 0.3
 max_tokens = 1500
-client = ***REMOVED***.OpenAI()
+client = openai.OpenAI()
 
 # === Token Counter ===
 def estimate_tokens(text):
-    enc = ***REMOVED***.encoding_for_model(model)
+    enc = tiktoken.encoding_for_model(model)
     return len(enc.encode(text))
 
 if "run_analysis" not in st.session_state:

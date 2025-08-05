@@ -15,6 +15,6 @@ pip install --upgrade pip >nul
 pip install -r requirements.txt
 
 echo Launching SQL Optimizer AI...
-***REMOVED*** run main.py
+streamlit run main.py
 
 pause
