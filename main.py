@@ -23,7 +23,7 @@ oauth_config = {
 }
 
 authenticator = stauth.Authenticate(
-    credentials={},
+    credentials={"usernames": {}},
     cookie_name="sqloptimizer",
     key=COOKIE_KEY,
     oauth=oauth_config
