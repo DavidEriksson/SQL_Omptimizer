@@ -238,14 +238,20 @@ def save_query_to_history(user_email, query_text, task_type, result_text=None, q
 
 def get_user_query_history(user_email, limit=50):
     """Get user's query history"""
-    cursor.execute('''
-    SELECT id, query_text, task_type, result_text, is_favorite, query_name, timestamp
-    FROM query_history 
-    WHERE user_email = ? 
-    ORDER BY timestamp DESC 
-    LIMIT ?
-    ''', (user_email, limit))
-    return cursor.fetchall()
+    try:
+        cursor.execute('''
+        SELECT id, query_text, task_type, result_text, is_favorite, query_name, timestamp
+        FROM query_history 
+        WHERE user_email = ? 
+        ORDER BY timestamp DESC 
+        LIMIT ?
+        ''', (user_email, limit))
+        results = cursor.fetchall()
+        print(f"DEBUG: get_user_query_history found {len(results)} results for {user_email}")
+        return results
+    except Exception as e:
+        print(f"DEBUG: Error in get_user_query_history: {e}")
+        return []
 
 def get_user_favorites(user_email):
     """Get user's favorite queries"""
