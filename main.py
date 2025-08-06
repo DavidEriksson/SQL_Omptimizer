@@ -1,43 +1,21 @@
 import streamlit as st
-import openai
-import tiktoken
-from datetime import datetime, timedelta
+import streamlit_authenticator as stauth
 import yaml
 import os
-import streamlit_authenticator as stauth
+from datetime import datetime, timedelta
+import openai
+import tiktoken
 
-# === Ladda nycklar och admins ===
+# === Load secrets ===
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 COOKIE_KEY = st.secrets["COOKIE_KEY"]
-ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]
+ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]  # list of admin emails (from .streamlit/secrets.toml)
 
+# === Load users.yaml ===
+with open("users.yaml") as file:
+    config = yaml.safe_load(file)
 
-USERS_FILE = "users.yaml"
-
-# === Initiera standardkonfiguration om users.yaml saknas eller är tom ===
-if not os.path.exists(USERS_FILE):
-    config = {
-        "credentials": {"usernames": {}},
-        "cookie": {"expiry_days": 30, "key": COOKIE_KEY, "name": "sql_optimizer_login"},
-        "preauthorized": {"emails": []}
-    }
-    with open(USERS_FILE, "w") as f:
-        yaml.dump(config, f)
-else:
-    with open(USERS_FILE) as f:
-        config = yaml.safe_load(f)
-
-    # Om nycklar saknas, skapa om config
-    if "credentials" not in config or "usernames" not in config.get("credentials", {}):
-        config = {
-            "credentials": {"usernames": {}},
-            "cookie": {"expiry_days": 30, "key": COOKIE_KEY, "name": "sql_optimizer_login"},
-            "preauthorized": {"emails": []}
-        }
-        with open(USERS_FILE, "w") as f:
-            yaml.dump(config, f)
-
-# === Autentisering ===
+# === Init authenticator ===
 authenticator = stauth.Authenticate(
     config,
     cookie_name="sql_optimizer_login",
@@ -45,102 +23,87 @@ authenticator = stauth.Authenticate(
     cookie_expiry_days=30
 )
 
-# === SIDBAR - Inloggningsknapp ===
-with st.sidebar:
-    login_button = st.button("🔐 Logga in")
-    register_button = st.button("📝 Registrera dig")
+# === Login/Register UI ===
+auth_option = st.sidebar.radio("Account", ("Login", "Register"))
 
-# === Visa inloggning om över 5 queries eller via knapp ===
-show_login = (
-    st.session_state.get("query_count", 0) >= 5
-    or login_button
-    or register_button
-)
+if auth_option == "Register":
+    try:
+        email, username, password = authenticator.register_user(preauthorization=False)
+        if email:
+            st.success("User registered. Please log in.")
+    except Exception as e:
+        st.error(f"Registration error: {str(e)}")
 
-# === Inloggning ===
-if show_login:
-    if register_button:
-        try:
-            email, username, name, password = authenticator.register_user(preauthorization=False)
-            if email and username and password:
-                with open(USERS_FILE, "w") as file:
-                    yaml.dump(config, file)
-                st.success("Registrering lyckades. Du kan nu logga in.")
-                st.stop()
-        except Exception as e:
-            st.error(f"Registrering misslyckades: {e}")
-            st.stop()
+name, auth_status, username = authenticator.login("Login", "main")
 
-    name, auth_status, username = authenticator.login("Logga in", "main")
-    if auth_status is False:
-        st.error("Felaktiga inloggningsuppgifter.")
-        st.stop()
-    elif auth_status is None:
-        st.warning("Vänligen logga in.")
-        st.stop()
-    else:
-        email = config["credentials"]["usernames"][username]["email"]
-        is_admin = email in ADMIN_EMAILS
-else:
-    # === Om inte inloggad (än) ===
-    name = "Guest"
-    email = None
-    is_admin = False
+if not auth_status:
+    st.stop()
 
-# === Session & Begränsning ===
-if "query_count" not in st.session_state:
-    st.session_state.query_count = 0
-    st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
-if datetime.now() >= st.session_state.query_reset_time:
-    st.session_state.query_count = 0
-    st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
-if "run_analysis" not in st.session_state:
-    st.session_state.run_analysis = False
+# === Logged in ===
+email = username
+is_admin = email in ADMIN_EMAILS
 
-# === UI ===
+authenticator.logout("Logout", "sidebar")
+
+# === Streamlit UI ===
 st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
 st.title("SQL Optimizer")
-st.success(f"👋 Welcome {name}")
+st.success(f"👋 Welcome {name} ({email})")
 if is_admin:
     st.sidebar.success("👑 Admin Account (Unlimited)")
 else:
     st.sidebar.info("👤 Standard Account")
+
+# === Session state ===
+if "query_count" not in st.session_state:
+    st.session_state.query_count = 0
+    st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
+
+if datetime.now() >= st.session_state.query_reset_time:
+    st.session_state.query_count = 0
+    st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
+
+if not is_admin:
+    st.sidebar.markdown("### 🔒 Usage Limit")
     st.sidebar.markdown(f"Queries used: **{st.session_state.query_count}/5**")
     reset_in = st.session_state.query_reset_time - datetime.now()
     st.sidebar.caption(f"Resets in: {reset_in.seconds // 3600}h {(reset_in.seconds % 3600) // 60}m")
 
-# === User input ===
+# === User Input ===
 st.markdown("---")
 st.subheader("Paste your SQL query")
 sql_query = st.text_area("SQL Code", height=200, placeholder="Paste SQL here...")
 task = st.selectbox("What do you want to do?", ["Explain", "Detect Issues", "Optimize", "Test"])
-
 model = "gpt-4o-mini"
 temperature = 0.3
 max_tokens = 1500
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-# === Token estimation ===
+# === Token Counter ===
 def estimate_tokens(text):
     enc = tiktoken.encoding_for_model(model)
     return len(enc.encode(text))
 
-# === Kör-knapp ===
+if "run_analysis" not in st.session_state:
+    st.session_state.run_analysis = False
+
+# === Run Button ===
 if st.button("Run"):
     if not sql_query.strip():
         st.error("❌ Please enter a SQL query.")
     elif not is_admin and st.session_state.query_count >= 5:
-        st.error("❌ Query limit reached. Please log in.")
+        st.error("❌ Query limit reached. Please wait for reset.")
     else:
         if not is_admin:
             st.session_state.query_count += 1
         st.session_state.run_analysis = True
-        st.experimental_rerun()
+        st.rerun()
 
-# === GPT-anrop ===
+# === Prompt Builder + GPT Logic ===
 if st.session_state.run_analysis:
-    prompts = {
-        "Explain": f"""You are an expert SQL instructor.
+    prompt_templates = {
+        "Explain": f"""
+You are an expert SQL instructor.
 
 Explain this SQL query step-by-step, including:
 - The purpose of the query
@@ -148,9 +111,13 @@ Explain this SQL query step-by-step, including:
 - The role of each table and join
 - Any assumptions about the data
 
+Don't talk like an AI bot.
+
 SQL Query:
-{sql_query}""",
-        "Detect Issues": f"""You are a senior SQL code reviewer.
+{sql_query}
+""",
+        "Detect Issues": f"""
+You are a senior SQL code reviewer.
 
 Analyze the following SQL query and list:
 - Performance problems
@@ -158,29 +125,41 @@ Analyze the following SQL query and list:
 - Logical issues
 - Suggestions for improvement
 
+Don't talk like an AI bot.
+
 SQL Query:
-{sql_query}""",
-        "Optimize": f"""You are a SQL performance expert.
+{sql_query}
+""",
+        "Optimize": f"""
+You are a SQL performance expert.
 
 Review the query below and:
 1. Suggest how to optimize it
 2. Provide a revised version
 3. Explain why your changes help
 
+Don't talk like an AI bot.
+
 SQL Query:
-{sql_query}""",
-        "Test": f"""You are a SQL testing expert.
+{sql_query}
+""",
+        "Test": f"""
+You are a SQL testing expert.
 
 Generate:
 - 3 to 5 rows of sample data for each table used
 - Expected result set based on the query
 - Brief notes on how the data satisfies the query logic
 
+Don't talk like an AI bot.
+
 SQL Query:
-{sql_query}"""
+{sql_query}
+"""
     }
 
-    prompt = prompts[task]
+    prompt = prompt_templates[task]
+
     with st.spinner("🔍 Analyzing your SQL..."):
         try:
             token_estimate = estimate_tokens(prompt)
@@ -198,4 +177,5 @@ SQL Query:
             st.download_button("📋 Copy Result", reply, file_name="sql_analysis.txt")
         except Exception as e:
             st.error(f"Error: {str(e)}")
+
     st.session_state.run_analysis = False
