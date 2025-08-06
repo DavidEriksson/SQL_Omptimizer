@@ -10,7 +10,7 @@ OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]  # list of admin emails
 
 # === SQLite Database Setup ===
-conn = sqlite3.connect('users.db', check_same_thread=False)
+conn = sqlite3.connect('SQLOpt_prod.db', check_same_thread=False)
 cursor = conn.cursor()
 
 # Create users table if it doesn't exist
