@@ -1,5 +1,6 @@
-streamlit==1.47.1
+streamlit
+numpy
+pandas
 openai
 tiktoken
-sqlite3
 bcrypt
