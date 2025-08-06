@@ -80,33 +80,34 @@ st.markdown("""
         text-align: left;
     }
     
-    /* Fix tab styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: transparent;
+    /* Fix tab styling - More specific selectors */
+    div[data-testid="stTabs"] > div[data-baseweb="tab-list"] {
+        gap: 8px !important;
+        background-color: transparent !important;
     }
     
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        padding: 10px 20px;
-        background-color: #f0f2f6;
-        border-radius: 10px;
-        color: #262730;
-        border: none;
-        font-weight: 500;
+    div[data-testid="stTabs"] > div[data-baseweb="tab-list"] button[data-baseweb="tab"] {
+        height: 50px !important;
+        padding: 10px 20px !important;
+        background-color: #f0f2f6 !important;
+        border-radius: 10px !important;
+        color: #262730 !important;
+        border: none !important;
+        font-weight: 500 !important;
+        margin-right: 4px !important;
     }
     
-    .stTabs [aria-selected="true"] {
+    div[data-testid="stTabs"] > div[data-baseweb="tab-list"] button[data-baseweb="tab"][aria-selected="true"] {
         background-color: #667eea !important;
         color: white !important;
     }
     
-    .stTabs [data-baseweb="tab"]:hover {
-        background-color: #e0e2e6;
-        color: #262730;
+    div[data-testid="stTabs"] > div[data-baseweb="tab-list"] button[data-baseweb="tab"]:hover {
+        background-color: #e0e2e6 !important;
+        color: #262730 !important;
     }
     
-    .stTabs [aria-selected="true"]:hover {
+    div[data-testid="stTabs"] > div[data-baseweb="tab-list"] button[data-baseweb="tab"][aria-selected="true"]:hover {
         background-color: #5a6fd8 !important;
         color: white !important;
     }
