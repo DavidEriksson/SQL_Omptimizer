@@ -1,169 +1,4 @@
-for query in recent_queries:
-                    email, task, timestamp = query
-                    query_time = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
-                    time_ago = datetime.now() - query_time
-                    
-                    if time_ago.seconds < 60:
-                        time_str = f"{time_ago.seconds}s ago"
-                    elif time_ago.seconds < 3600:
-                        time_str = f"{time_ago.seconds//60}m ago"
-                    else:
-                        time_str = f"{time_ago.seconds//3600}h ago"
-                    
-                    st.markdown(f"**{email}** used *{task}* {time_str}")
-            else:
-                st.info("No recent activity")
-    
-    with tab2:
-        if analytics_data['top_users']:
-            df_users = pd.DataFrame(analytics_data['top_users'], columns=['Email', 'Name', 'Query Count'])
-            st.dataframe(df_users, use_container_width=True)
-        else:
-            st.info("No user data available yet")
-    
-    with tab3:
-        col_task1, col_task2 = st.columns([1, 1])
-        
-        with col_task1:
-            if analytics_data['queries_by_task']:
-                df_tasks = pd.DataFrame(analytics_data['queries_by_task'], columns=['Task Type', 'Count'])
-                st.bar_chart(df_tasks.set_index('Task Type'), use_container_width=True)
-        
-        with col_task2:
-            if analytics_data['queries_by_task']:
-                st.dataframe(df_tasks, use_container_width=True)
-            else:
-                st.info("No task data available yet")
-    
-    with tab4:
-        if analytics_data['recent_errors']:
-            df_errors = pd.DataFrame(analytics_data['recent_errors'], 
-                                   columns=['User Email', 'Task Type', 'Error', 'Timestamp'])
-            st.dataframe(df_errors, use_container_width=True)
-        else:
-            st.success("No recent errors!")
-
-elif st.session_state.current_page == "Users" and st.session_state.is_admin:
-    # User Management page
-    st.markdown("## User Management")
-    
-    tab1, tab2, tab3 = st.tabs(["All Users", "Manage Users", "User Analytics"])
-    
-    with tab1:
-        st.markdown("#### All Registered Users")
-        cursor.execute('SELECT email, name, admin FROM users')
-        users = cursor.fetchall()
-        
-        if users:
-            df = pd.DataFrame(users, columns=['Email', 'Name', 'Admin Status'])
-            df['Admin Status'] = df['Admin Status'].map({1: 'Admin', 0: 'User', None: 'User'})
-            st.dataframe(df, use_container_width=True)
-            st.caption(f"Total users: {len(users)}")
-        else:
-            st.info("No users found")
-    
-    with tab2:
-        col_manage1, col_manage2 = st.columns(2)
-        
-        with col_manage1:
-            st.markdown("#### Grant Admin Access")
-            cursor.execute('SELECT email, name FROM users WHERE admin = 0 OR admin IS NULL')
-            regular_users = cursor.fetchall()
-            
-            if regular_users:
-                user_options = [f"{user[1]} ({user[0]})" for user in regular_users]
-                selected_user_idx = st.selectbox("Select user:", range(len(user_options)), 
-                                                format_func=lambda x: user_options[x])
-                selected_email = regular_users[selected_user_idx][0]
-                
-                if st.button("Grant Admin Access", use_container_width=True, type="primary"):
-                    cursor.execute('UPDATE users SET admin = 1 WHERE email = ?', (selected_email,))
-                    conn.commit()
-                    st.success(f"{selected_email} is now an admin!")
-                    st.rerun()
-            else:
-                st.info("All users are already admins")
-        
-        with col_manage2:
-            st.markdown("#### Remove User")
-            cursor.execute('SELECT email, name FROM users')
-            all_users = cursor.fetchall()
-            
-            if len(all_users) > 1:
-                user_options_delete = [f"{user[1]} ({user[0]})" for user in all_users]
-                selected_user_delete_idx = st.selectbox("Select user to delete:", range(len(user_options_delete)), 
-                                                       format_func=lambda x: user_options_delete[x], key="delete_user")
-                selected_email_delete = all_users[selected_user_delete_idx][0]
-                
-                if selected_email_delete != st.session_state.user_email:
-                    if st.button("Delete User", use_container_width=True, type="secondary"):
-                        cursor.execute('DELETE FROM users WHERE email = ?', (selected_email_delete,))
-                        conn.commit()
-                        st.success(f"User {selected_email_delete} deleted!")
-                        st.rerun()
-                else:
-                    st.error("Cannot delete your own account!")
-            else:
-                st.info("Cannot delete users - you're the only one!")
-    
-    with tab3:
-        st.markdown("#### Individual User Statistics")
-        
-        # User activity breakdown
-        cursor.execute('''
-        SELECT 
-            u.email, u.name,
-            COUNT(ql.id) as total_queries,
-            SUM(CASE WHEN ql.success = 1 THEN 1 ELSE 0 END) as successful_queries,
-            MAX(ql.timestamp) as last_activity
-        FROM users u
-        LEFT JOIN query_logs ql ON u.email = ql.user_email
-        GROUP BY u.email, u.name
-        ORDER BY total_queries DESC
-        ''')
-        
-        user_stats = cursor.fetchall()
-        
-        if user_stats:
-            for stat in user_stats:
-                email, name, total, success, last_activity = stat
-                success_rate = (success / total * 100) if total > 0 else 0
-                
-                with st.expander(f"{name} ({email})"):
-                    col_stat1, col_stat2, col_stat3 = st.columns(3)
-                    
-                    with col_stat1:
-                        st.metric("Total Queries", total or 0)
-                    with col_stat2:
-                        st.metric("Success Rate", f"{success_rate:.1f}%" if total > 0 else "N/A")
-                    with col_stat3:
-                        st.metric("Last Activity", last_activity or "Never")
-                    
-                    if total > 0:
-                        # Get task breakdown for this user
-                        cursor.execute('''
-                        SELECT task_type, COUNT(*) as count
-                        FROM query_logs 
-                        WHERE user_email = ?
-                        GROUP BY task_type
-                        ''', (email,))
-                        
-                        user_tasks = cursor.fetchall()
-                        if user_tasks:
-                            st.markdown("**Task Breakdown:**")
-                            for task, count in user_tasks:
-                                st.markdown(f"- {task}: {count} queries")
-        else:
-            st.info("No user activity data available")
-
-# === Footer ===
-st.markdown("---")
-st.markdown("""
-<div style="text-align: center; color: #666; padding: 2rem 0;">
-    <p>SQL Optimizer AI - Powered by GPT-4o Mini</p>
-    <p>Built with Streamlit</p>
-</div>
-""", unsafe_allow_html=True)import streamlit as st
+import streamlit as st
 import streamlit.components.v1
 import openai
 import tiktoken
@@ -222,20 +57,6 @@ st.markdown("""
         margin: 1rem 0;
     }
     
-    /* Fix text area styling */
-    .stTextArea textarea {
-        font-family: 'Courier New', monospace !important;
-        tab-size: 4 !important;
-        border: 1px solid #444 !important;
-        background-color: #262730 !important;
-        color: #fafafa !important;
-    }
-    
-    .stTextArea textarea:focus {
-        border-color: #667eea !important;
-        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
-    }
-    
     .sidebar .element-container {
         margin-bottom: 1rem;
     }
@@ -258,6 +79,20 @@ st.markdown("""
         border: none;
         border-radius: 8px;
         text-align: left;
+    }
+    
+    /* Fix text area styling */
+    .stTextArea textarea {
+        font-family: 'Courier New', monospace !important;
+        tab-size: 4 !important;
+        border: 1px solid #444 !important;
+        background-color: #262730 !important;
+        color: #fafafa !important;
+    }
+    
+    .stTextArea textarea:focus {
+        border-color: #667eea !important;
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
     }
     
     /* Fix tab styling - More specific selectors */
@@ -418,6 +253,20 @@ def get_analytics_data():
     
     return analytics
 
+def get_analytics_data_cached(force_refresh=False):
+    now = datetime.now()
+    
+    if (force_refresh or 
+        st.session_state.last_analytics_update is None or 
+        now - st.session_state.last_analytics_update > timedelta(seconds=30)):
+        
+        analytics = get_analytics_data()
+        st.session_state.cached_analytics = analytics
+        st.session_state.last_analytics_update = now
+        return analytics, True
+    else:
+        return st.session_state.cached_analytics, False
+
 def format_sql(sql_query):
     """Format SQL query with proper indentation and capitalization"""
     if not sql_query.strip():
@@ -524,18 +373,6 @@ def format_sql(sql_query):
     result = result.replace(' \n', '\n').replace('\n ', '\n')
     
     return result
-    now = datetime.now()
-    
-    if (force_refresh or 
-        st.session_state.last_analytics_update is None or 
-        now - st.session_state.last_analytics_update > timedelta(seconds=30)):
-        
-        analytics = get_analytics_data()
-        st.session_state.cached_analytics = analytics
-        st.session_state.last_analytics_update = now
-        return analytics, True
-    else:
-        return st.session_state.cached_analytics, False
 
 # === Session state init ===
 if "logged_in" not in st.session_state:
@@ -571,7 +408,7 @@ if not st.session_state.logged_in:
     with col2:
         st.markdown("### Welcome to SQL Optimizer")
         
-        auth_tab1, auth_tab2 = st.tabs(["🔑 Login", "📝 Register"])
+        auth_tab1, auth_tab2 = st.tabs(["Login", "Register"])
         
         with auth_tab1:
             with st.form("login_form"):
@@ -1253,7 +1090,7 @@ elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
                     else:
                         time_str = f"{time_ago.seconds//3600}h ago"
                     
-                    st.markdown(f"🔸 **{email}** used *{task}* {time_str}")
+                    st.markdown(f"**{email}** used *{task}* {time_str}")
             else:
                 st.info("No recent activity")
     
@@ -1284,13 +1121,13 @@ elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
                                    columns=['User Email', 'Task Type', 'Error', 'Timestamp'])
             st.dataframe(df_errors, use_container_width=True)
         else:
-            st.success("🎉 No recent errors!")
+            st.success("No recent errors!")
 
 elif st.session_state.current_page == "Users" and st.session_state.is_admin:
     # User Management page
-    st.markdown("## 👥 User Management")
+    st.markdown("## User Management")
     
-    tab1, tab2, tab3 = st.tabs(["📋 All Users", "⚙️ Manage Users", "📊 User Analytics"])
+    tab1, tab2, tab3 = st.tabs(["All Users", "Manage Users", "User Analytics"])
     
     with tab1:
         st.markdown("#### All Registered Users")
@@ -1299,7 +1136,7 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
         
         if users:
             df = pd.DataFrame(users, columns=['Email', 'Name', 'Admin Status'])
-            df['Admin Status'] = df['Admin Status'].map({1: '👑 Admin', 0: '👤 User', None: '👤 User'})
+            df['Admin Status'] = df['Admin Status'].map({1: 'Admin', 0: 'User', None: 'User'})
             st.dataframe(df, use_container_width=True)
             st.caption(f"Total users: {len(users)}")
         else:
@@ -1309,7 +1146,7 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
         col_manage1, col_manage2 = st.columns(2)
         
         with col_manage1:
-            st.markdown("#### 👑 Grant Admin Access")
+            st.markdown("#### Grant Admin Access")
             cursor.execute('SELECT email, name FROM users WHERE admin = 0 OR admin IS NULL')
             regular_users = cursor.fetchall()
             
@@ -1319,16 +1156,16 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
                                                 format_func=lambda x: user_options[x])
                 selected_email = regular_users[selected_user_idx][0]
                 
-                if st.button("🚀 Grant Admin Access", use_container_width=True, type="primary"):
+                if st.button("Grant Admin Access", use_container_width=True, type="primary"):
                     cursor.execute('UPDATE users SET admin = 1 WHERE email = ?', (selected_email,))
                     conn.commit()
-                    st.success(f"✅ {selected_email} is now an admin!")
+                    st.success(f"{selected_email} is now an admin!")
                     st.rerun()
             else:
                 st.info("All users are already admins")
         
         with col_manage2:
-            st.markdown("#### 🗑️ Remove User")
+            st.markdown("#### Remove User")
             cursor.execute('SELECT email, name FROM users')
             all_users = cursor.fetchall()
             
@@ -1339,18 +1176,18 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
                 selected_email_delete = all_users[selected_user_delete_idx][0]
                 
                 if selected_email_delete != st.session_state.user_email:
-                    if st.button("🗑️ Delete User", use_container_width=True, type="secondary"):
+                    if st.button("Delete User", use_container_width=True, type="secondary"):
                         cursor.execute('DELETE FROM users WHERE email = ?', (selected_email_delete,))
                         conn.commit()
-                        st.success(f"✅ User {selected_email_delete} deleted!")
+                        st.success(f"User {selected_email_delete} deleted!")
                         st.rerun()
                 else:
-                    st.error("❌ Cannot delete your own account!")
+                    st.error("Cannot delete your own account!")
             else:
                 st.info("Cannot delete users - you're the only one!")
     
     with tab3:
-        st.markdown("#### 👤 Individual User Statistics")
+        st.markdown("#### Individual User Statistics")
         
         # User activity breakdown
         cursor.execute('''
@@ -1372,7 +1209,7 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
                 email, name, total, success, last_activity = stat
                 success_rate = (success / total * 100) if total > 0 else 0
                 
-                with st.expander(f"📊 {name} ({email})"):
+                with st.expander(f"{name} ({email})"):
                     col_stat1, col_stat2, col_stat3 = st.columns(3)
                     
                     with col_stat1:
@@ -1403,7 +1240,7 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; padding: 2rem 0;">
-    <p>🔍 SQL Optimizer AI - Powered by GPT-4o Mini</p>
-    <p>Built with ❤️ using Streamlit</p>
+    <p>SQL Optimizer AI - Powered by GPT-4o Mini</p>
+    <p>Built with Streamlit</p>
 </div>
 """, unsafe_allow_html=True)
