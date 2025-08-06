@@ -72,15 +72,34 @@ st.markdown("""
         margin-bottom: 1rem;
     }
     
-    .nav-button {
+    /* Navigation button styling */
+    .stButton > button {
         width: 100%;
         margin: 0.2rem 0;
         padding: 0.5rem 1rem;
-        background: #667eea;
-        color: white;
-        border: none;
         border-radius: 8px;
         text-align: left;
+        transition: all 0.2s ease;
+    }
+    
+    /* Active page button styling */
+    div[data-testid="stSidebar"] .element-container:has(button[kind="primary"]) button {
+        background-color: #667eea !important;
+        color: white !important;
+        border: 2px solid #667eea !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Inactive navigation buttons */
+    div[data-testid="stSidebar"] .element-container:has(button[kind="secondary"]) button {
+        background-color: transparent !important;
+        color: #a0aec0 !important;
+        border: 1px solid #4a5568 !important;
+    }
+    
+    div[data-testid="stSidebar"] .element-container:has(button[kind="secondary"]) button:hover {
+        background-color: #4a5568 !important;
+        color: white !important;
     }
     
     /* Fix text area styling */
