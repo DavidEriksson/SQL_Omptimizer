@@ -171,6 +171,21 @@ CREATE TABLE IF NOT EXISTS query_logs (
     FOREIGN KEY (user_email) REFERENCES users(email)
 )
 ''')
+
+# === Query History Database Setup ===
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS query_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_email TEXT NOT NULL,
+    query_text TEXT NOT NULL,
+    task_type TEXT NOT NULL,
+    result_text TEXT,
+    is_favorite BOOLEAN DEFAULT 0,
+    query_name TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_email) REFERENCES users(email)
+)
+''')
 conn.commit()
 
 def add_user(email, name, password, is_admin=False):
@@ -193,6 +208,58 @@ def log_query(user_email, task_type, query_length, tokens_used=None, success=Tru
     VALUES (?, ?, ?, ?, ?, ?)
     ''', (user_email, task_type, query_length, tokens_used, success, error_message))
     conn.commit()
+
+def save_query_to_history(user_email, query_text, task_type, result_text=None, query_name=None):
+    """Save a query to user's history"""
+    cursor.execute('''
+    INSERT INTO query_history (user_email, query_text, task_type, result_text, query_name)
+    VALUES (?, ?, ?, ?, ?)
+    ''', (user_email, query_text, task_type, result_text, query_name))
+    conn.commit()
+    return cursor.lastrowid
+
+def get_user_query_history(user_email, limit=50):
+    """Get user's query history"""
+    cursor.execute('''
+    SELECT id, query_text, task_type, result_text, is_favorite, query_name, timestamp
+    FROM query_history 
+    WHERE user_email = ? 
+    ORDER BY timestamp DESC 
+    LIMIT ?
+    ''', (user_email, limit))
+    return cursor.fetchall()
+
+def get_user_favorites(user_email):
+    """Get user's favorite queries"""
+    cursor.execute('''
+    SELECT id, query_text, task_type, result_text, query_name, timestamp
+    FROM query_history 
+    WHERE user_email = ? AND is_favorite = 1 
+    ORDER BY timestamp DESC
+    ''', (user_email,))
+    return cursor.fetchall()
+
+def toggle_favorite(query_id):
+    """Toggle favorite status of a query"""
+    cursor.execute('SELECT is_favorite FROM query_history WHERE id = ?', (query_id,))
+    current_status = cursor.fetchone()[0]
+    new_status = 0 if current_status else 1
+    cursor.execute('UPDATE query_history SET is_favorite = ? WHERE id = ?', (new_status, query_id))
+    conn.commit()
+    return new_status
+
+def delete_query_from_history(query_id, user_email):
+    """Delete a query from history (with user verification)"""
+    cursor.execute('DELETE FROM query_history WHERE id = ? AND user_email = ?', (query_id, user_email))
+    conn.commit()
+    return cursor.rowcount > 0
+
+def update_query_name(query_id, user_email, new_name):
+    """Update the name of a saved query"""
+    cursor.execute('UPDATE query_history SET query_name = ? WHERE id = ? AND user_email = ?', 
+                   (new_name, query_id, user_email))
+    conn.commit()
+    return cursor.rowcount > 0
 
 def get_analytics_data():
     analytics = {}
@@ -394,6 +461,8 @@ if "current_page" not in st.session_state:
     st.session_state.current_page = "Home"
 if "formatted_sql" not in st.session_state:
     st.session_state.formatted_sql = None
+if "selected_history_query" not in st.session_state:
+    st.session_state.selected_history_query = None
 
 # === Header ===
 st.markdown("""
@@ -494,6 +563,10 @@ with st.sidebar:
     
     if st.button("SQL Optimizer", key="nav_optimizer", use_container_width=True):
         st.session_state.current_page = "Optimizer"
+        st.rerun()
+    
+    if st.button("Query History", key="nav_history", use_container_width=True):
+        st.session_state.current_page = "History"
         st.rerun()
     
     if st.session_state.is_admin:
@@ -609,8 +682,13 @@ elif st.session_state.current_page == "Optimizer":
     col1, col2 = st.columns([3, 1])
     
     with col1:
-        # Use formatted SQL if available, otherwise use empty string
-        default_value = st.session_state.formatted_sql if st.session_state.formatted_sql else ""
+        # Use history query if selected, formatted SQL if available, otherwise empty
+        default_value = ""
+        if st.session_state.selected_history_query:
+            default_value = st.session_state.selected_history_query
+            st.session_state.selected_history_query = None  # Clear after using
+        elif st.session_state.formatted_sql:
+            default_value = st.session_state.formatted_sql
         
         sql_query = st.text_area(
             "SQL Query", 
@@ -952,11 +1030,33 @@ SQL Query to Test:
                         success=True
                     )
                     
+                    # Save to query history
+                    history_id = save_query_to_history(
+                        user_email=st.session_state.user_email,
+                        query_text=sql_query,
+                        task_type=task,
+                        result_text=reply
+                    )
+                    
                     st.success("Analysis complete!")
                     
                     # Results in a nice container
                     st.markdown("### Analysis Results")
-                    st.markdown(f"**Task:** {task}")
+                    
+                    # Add save options
+                    col_save1, col_save2, col_save3 = st.columns([2, 1, 1])
+                    with col_save1:
+                        st.markdown(f"**Task:** {task}")
+                    with col_save2:
+                        save_name = st.text_input("Save as:", placeholder="Enter name (optional)", key="save_name")
+                    with col_save3:
+                        if st.button("Save Query", help="Save this query with a custom name"):
+                            if save_name.strip():
+                                update_query_name(history_id, st.session_state.user_email, save_name.strip())
+                                st.success(f"Saved as '{save_name}'!")
+                            else:
+                                st.info("Query automatically saved to history")
+                    
                     st.markdown("---")
                     st.markdown(reply)
                     
