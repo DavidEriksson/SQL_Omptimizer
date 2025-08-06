@@ -991,13 +991,18 @@ SQL Query to Test:
                         success=True
                     )
                     
-                    # Save to query history
-                    history_id = save_query_to_history(
-                        user_email=st.session_state.user_email,
-                        query_text=sql_query,
-                        task_type=task,
-                        result_text=reply
-                    )
+                    # Save to query history - make sure this happens
+                    try:
+                        history_id = save_query_to_history(
+                            user_email=st.session_state.user_email,
+                            query_text=sql_query,
+                            task_type=task,
+                            result_text=reply
+                        )
+                        st.success("Analysis complete and saved to history!")
+                    except Exception as history_error:
+                        st.error(f"Analysis complete but failed to save to history: {str(history_error)}")
+                        history_id = None
                     
                     st.success("Analysis complete!")
                     
@@ -1012,11 +1017,15 @@ SQL Query to Test:
                         save_name = st.text_input("Save as:", placeholder="Enter name (optional)", key="save_name")
                     with col_save3:
                         if st.button("Save Query", help="Save this query with a custom name"):
-                            if save_name.strip():
-                                update_query_name(history_id, st.session_state.user_email, save_name.strip())
-                                st.success(f"Saved as '{save_name}'!")
+                            if history_id and save_name.strip():
+                                if update_query_name(history_id, st.session_state.user_email, save_name.strip()):
+                                    st.success(f"Renamed to '{save_name}'!")
+                                else:
+                                    st.error("Failed to update name")
+                            elif save_name.strip():
+                                st.info("Query name will be applied on next analysis")
                             else:
-                                st.info("Query automatically saved to history")
+                                st.info("Query already saved to history")
                     
                     st.markdown("---")
                     st.markdown(reply)
