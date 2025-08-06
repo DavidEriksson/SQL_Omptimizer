@@ -53,7 +53,7 @@ st.markdown("""
         background: transparent;
         padding: 2rem;
         border-radius: 15px;
-        border: 1px solid #e9ecef;
+        border: 1px solid #444;
         margin: 1rem 0;
     }
     
@@ -61,6 +61,14 @@ st.markdown("""
     .stTextArea textarea {
         font-family: 'Courier New', monospace !important;
         tab-size: 4 !important;
+        border: 1px solid #444 !important;
+        background-color: #262730 !important;
+        color: #fafafa !important;
+    }
+    
+    .stTextArea textarea:focus {
+        border-color: #667eea !important;
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
     }
     
     .sidebar .element-container {
@@ -511,23 +519,36 @@ elif st.session_state.current_page == "Optimizer":
                         const end = this.selectionEnd;
                         const value = this.value;
                         
-                        // Insert 4 spaces at cursor position
-                        this.value = value.substring(0, start) + '    ' + value.substring(end);
-                        
-                        // Move cursor after the inserted spaces
-                        this.selectionStart = this.selectionEnd = start + 4;
+                        if (e.shiftKey) {
+                            // Shift+Tab: Remove indentation
+                            const lineStart = value.lastIndexOf('\\n', start - 1) + 1;
+                            const lineText = value.substring(lineStart, start);
+                            
+                            if (lineText.startsWith('    ')) {
+                                this.value = value.substring(0, lineStart) + lineText.substring(4) + value.substring(start);
+                                this.selectionStart = this.selectionEnd = start - 4;
+                            } else if (lineText.startsWith('\\t')) {
+                                this.value = value.substring(0, lineStart) + lineText.substring(1) + value.substring(start);
+                                this.selectionStart = this.selectionEnd = start - 1;
+                            }
+                        } else {
+                            // Tab: Add indentation
+                            this.value = value.substring(0, start) + '    ' + value.substring(end);
+                            this.selectionStart = this.selectionEnd = start + 4;
+                        }
                         
                         // Trigger change event
                         this.dispatchEvent(new Event('input', { bubbles: true }));
                     }
                 });
+                console.log('Tab handling enabled for SQL textarea');
             }
         }
         
-        // Try to enable tabs after a short delay
+        // Try to enable tabs after different delays
+        setTimeout(enableTabs, 100);
         setTimeout(enableTabs, 500);
         setTimeout(enableTabs, 1000);
-        setTimeout(enableTabs, 2000);
         </script>
         """, height=0)
     
