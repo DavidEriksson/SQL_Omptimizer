@@ -1,5 +1,5 @@
 streamlit
 openai
 tiktoken
-pyyaml
-streamlit-authenticator
+sqlite3
+bcrypt

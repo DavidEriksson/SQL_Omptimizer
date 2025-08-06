@@ -1,76 +1,114 @@
 import streamlit as st
-import streamlit_authenticator as stauth
 import openai
 import tiktoken
 from datetime import datetime, timedelta
+import sqlite3
+import bcrypt
 
 # === Load from Streamlit Secrets ===
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-COOKIE_KEY = st.secrets["COOKIE_KEY"]
 ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]  # list of admin emails
 
-# === Convert secrets.toml into config dict ===
-config = {
-    "credentials": {
-        "usernames": dict(st.secrets["credentials"]["usernames"])
-    },
-    "cookie": {
-        "expiry_days": st.secrets["cookie"]["expiry_days"],
-        "name": st.secrets["cookie"]["name"]
-    },
-    "preauthorized": {
-        "emails": list(st.secrets["preauthorized"]["emails"])
-    }
-}
+# === SQLite Database Setup ===
+conn = sqlite3.connect('users.db', check_same_thread=False)
+cursor = conn.cursor()
 
-# === Init authenticator ===
-authenticator = stauth.Authenticate(
-    config,
-    cookie_name="sql_optimizer_login",
-    key=COOKIE_KEY,
-    cookie_expiry_days=30
+# Create users table if it doesn't exist
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS users (
+    email TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    password TEXT NOT NULL,
+    is_admin BOOLEAN NOT NULL
 )
+''')
+conn.commit()
+
+def add_user(email, name, password, is_admin=False):
+    hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    cursor.execute('''
+    INSERT INTO users (email, name, password, is_admin) VALUES (?, ?, ?, ?)
+    ''', (email, name, hashed_password, is_admin))
+    conn.commit()
+
+def get_user(email):
+    cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
+    return cursor.fetchone()
+
+def verify_password(stored_password, provided_password):
+    return bcrypt.checkpw(provided_password.encode(), stored_password.encode())
+
+# === Streamlit UI ===
+st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
+st.title("SQL Optimizer")
+
+# === Session state init ===
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "user_email" not in st.session_state:
+    st.session_state.user_email = None
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
+if "query_count" not in st.session_state:
+    st.session_state.query_count = 0
+    st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
 
 # === Login/Register UI ===
-auth_option = st.sidebar.radio("Account", ("Login", "Register"))
+if not st.session_state.logged_in:
+    auth_option = st.sidebar.radio("Account", ("Login", "Register"))
 
-if auth_option == "Register":
-    try:
-        email, username, password = authenticator.register_user(preauthorization=False)
-        if email:
-            st.success("✅ User registered! Please log in.")
-    except Exception as e:
-        st.error(f"Registration error: {str(e)}")
+    if auth_option == "Register":
+        with st.form("register_form"):
+            new_email = st.text_input("Email")
+            new_name = st.text_input("Name")
+            new_password = st.text_input("Password", type="password")
+            register_button = st.form_submit_button("Register")
 
-name, auth_status, username = authenticator.login("Login", "main")
+        if register_button:
+            if get_user(new_email):
+                st.error("Email already exists")
+            else:
+                add_user(new_email, new_name, new_password)
+                st.success("✅ User registered! Please log in.")
 
-if not auth_status:
+    else:  # Login
+        with st.form("login_form"):
+            email = st.text_input("Email")
+            password = st.text_input("Password", type="password")
+            login_button = st.form_submit_button("Login")
+
+        if login_button:
+            user = get_user(email)
+            if user and verify_password(user[2], password):
+                st.session_state.logged_in = True
+                st.session_state.user_email = email
+                st.session_state.is_admin = user[3]
+                st.experimental_rerun()
+            else:
+                st.error("Invalid email or password")
+
     st.stop()
 
 # === Logged in ===
-email = username
-is_admin = email in ADMIN_EMAILS
-
-authenticator.logout("Logout", "sidebar")
-
-# === App UI ===
-st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
-st.title("SQL Optimizer")
-st.success(f"👋 Welcome {name} ({email})")
-if is_admin:
+# === Logged in ===
+st.success(f"👋 Welcome {st.session_state.user_email}")
+if st.session_state.is_admin:
     st.sidebar.success("👑 Admin Account (Unlimited)")
 else:
     st.sidebar.info("👤 Standard Account")
 
-# === Session state init ===
-if "query_count" not in st.session_state:
-    st.session_state.query_count = 0
-    st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
+if st.sidebar.button("Logout"):
+    st.session_state.logged_in = False
+    st.session_state.user_email = None
+    st.session_state.is_admin = False
+    st.experimental_rerun()
+
+# Reset query count if necessary
 if datetime.now() >= st.session_state.query_reset_time:
     st.session_state.query_count = 0
     st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
 
-if not is_admin:
+if not st.session_state.is_admin:
     st.sidebar.markdown("### 🔒 Usage Limit")
     st.sidebar.markdown(f"Queries used: **{st.session_state.query_count}/5**")
     reset_in = st.session_state.query_reset_time - datetime.now()
