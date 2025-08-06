@@ -103,6 +103,89 @@ if st.sidebar.button("Logout"):
     st.session_state.is_admin = False
     st.rerun()
 
+# Add this TEMPORARILY right after your login section
+# Remove this code after you've made yourself admin!
+
+# === EMERGENCY ADMIN ACCESS (REMOVE AFTER USE) ===
+if st.session_state.logged_in:
+    # Check if there are any admin users
+    cursor.execute('SELECT COUNT(*) FROM users WHERE admin = 1')
+    admin_count = cursor.fetchone()[0]
+    
+    if admin_count == 0:  # No admins exist
+        st.warning("🚨 No admin users found!")
+        if st.button("🔧 Make Me Admin (Emergency)"):
+            cursor.execute('UPDATE users SET admin = 1 WHERE email = ?', (st.session_state.user_email,))
+            conn.commit()
+            st.session_state.is_admin = True
+            st.success("✅ Emergency admin access granted!")
+            st.rerun()
+    
+    # OR: Force admin for specific email (replace with your email)
+    YOUR_EMAIL = "your-email@example.com"  # CHANGE THIS!
+    if st.session_state.user_email == YOUR_EMAIL and not st.session_state.is_admin:
+        if st.button(f"🔧 Grant Admin to {YOUR_EMAIL}"):
+            cursor.execute('UPDATE users SET admin = 1 WHERE email = ?', (YOUR_EMAIL,))
+            conn.commit()
+            st.session_state.is_admin = True
+            st.success("✅ Admin access granted!")
+            st.rerun()
+# === END EMERGENCY ACCESS ===
+
+# === Admin User Management ===
+if st.session_state.is_admin:
+    with st.expander("👑 Admin: User Management"):
+        tab1, tab2 = st.tabs(["View Users", "Manage Users"])
+        
+        with tab1:
+            st.subheader("All Users")
+            cursor.execute('SELECT email, name, admin FROM users')
+            users = cursor.fetchall()
+            
+            if users:
+                import pandas as pd
+                df = pd.DataFrame(users, columns=['Email', 'Name', 'Admin'])
+                st.dataframe(df, use_container_width=True)
+                st.caption(f"Total users: {len(users)}")
+            else:
+                st.info("No users found")
+        
+        with tab2:
+            st.subheader("Make User Admin")
+            cursor.execute('SELECT email, name FROM users WHERE admin = 0 OR admin IS NULL')
+            regular_users = cursor.fetchall()
+            
+            if regular_users:
+                user_emails = [user[0] for user in regular_users]
+                selected_email = st.selectbox("Select user to make admin:", user_emails)
+                
+                if st.button("Grant Admin Access"):
+                    cursor.execute('UPDATE users SET admin = 1 WHERE email = ?', (selected_email,))
+                    conn.commit()
+                    st.success(f"✅ {selected_email} is now an admin!")
+                    st.rerun()
+            else:
+                st.info("All users are already admins")
+            
+            st.subheader("Remove User")
+            cursor.execute('SELECT email, name FROM users')
+            all_users = cursor.fetchall()
+            
+            if len(all_users) > 1:  # Don't allow deleting the last user
+                user_emails_delete = [user[0] for user in all_users]
+                selected_email_delete = st.selectbox("Select user to delete:", user_emails_delete)
+                
+                if st.button("🗑️ Delete User", type="secondary"):
+                    if selected_email_delete != st.session_state.user_email:
+                        cursor.execute('DELETE FROM users WHERE email = ?', (selected_email_delete,))
+                        conn.commit()
+                        st.success(f"✅ User {selected_email_delete} deleted!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Cannot delete your own account!")
+            else:
+                st.info("Cannot delete users - you're the only one!")
+
 # Reset query count if necessary
 if datetime.now() >= st.session_state.query_reset_time:
     st.session_state.query_count = 0
