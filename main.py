@@ -1006,8 +1006,8 @@ SQL Query to Test:
                             task_type=task,
                             result_text=reply
                         )
-                        # Just one success message
-                        st.success("Analysis complete!")
+                        # Show success message with confirmation
+                        st.success(f"Analysis complete! (Saved to history: ID {history_id})")
                     except Exception as history_error:
                         st.error(f"Analysis complete but failed to save to history: {str(history_error)}")
                         history_id = None
