@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     password TEXT NOT NULL,
-    is_admin BOOLEAN NOT NULL
+    admin BOOLEAN NULL
 )
 ''')
 conn.commit()
@@ -27,7 +27,7 @@ conn.commit()
 def add_user(email, name, password, is_admin=False):
     hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     cursor.execute('''
-    INSERT INTO users (email, name, password, is_admin) VALUES (?, ?, ?, ?)
+    INSERT INTO users (email, name, password, admin) VALUES (?, ?, ?, ?)
     ''', (email, name, hashed_password, is_admin))
     conn.commit()
 
@@ -83,7 +83,7 @@ if not st.session_state.logged_in:
                 st.session_state.logged_in = True
                 st.session_state.user_email = email
                 st.session_state.is_admin = user[3]
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("Invalid email or password")
 
@@ -101,7 +101,7 @@ if st.sidebar.button("Logout"):
     st.session_state.logged_in = False
     st.session_state.user_email = None
     st.session_state.is_admin = False
-    st.experimental_rerun()
+    st.rerun()
 
 # Reset query count if necessary
 if datetime.now() >= st.session_state.query_reset_time:
@@ -137,10 +137,10 @@ if "run_analysis" not in st.session_state:
 if st.button("Run"):
     if not sql_query.strip():
         st.error("❌ Please enter a SQL query.")
-    elif not is_admin and st.session_state.query_count >= 5:
+    elif not st.session_state.is_admin and st.session_state.query_count >= 5:
         st.error("❌ Query limit reached. Please wait for reset.")
     else:
-        if not is_admin:
+        if not st.session_state.is_admin:
             st.session_state.query_count += 1
         st.session_state.run_analysis = True
         st.rerun()
