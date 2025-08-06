@@ -399,6 +399,8 @@ if "formatted_sql" not in st.session_state:
     st.session_state.formatted_sql = None
 if "selected_history_query" not in st.session_state:
     st.session_state.selected_history_query = None
+if "current_sql_query" not in st.session_state:
+    st.session_state.current_sql_query = ""
 
 # === Header ===
 st.markdown("""
@@ -618,13 +620,16 @@ elif st.session_state.current_page == "Optimizer":
     col1, col2 = st.columns([3, 1])
     
     with col1:
-        # Use history query if selected, formatted SQL if available, otherwise empty
+        # Use history query if selected, formatted SQL if available, otherwise use current stored query
         default_value = ""
         if st.session_state.selected_history_query:
             default_value = st.session_state.selected_history_query
             st.session_state.selected_history_query = None  # Clear after using
         elif st.session_state.formatted_sql:
             default_value = st.session_state.formatted_sql
+            st.session_state.formatted_sql = None  # Clear after using
+        else:
+            default_value = st.session_state.current_sql_query
         
         sql_query = st.text_area(
             "SQL Query", 
@@ -635,9 +640,9 @@ elif st.session_state.current_page == "Optimizer":
             key="sql_input"
         )
         
-        # Clear formatted SQL after it's been displayed
-        if st.session_state.formatted_sql:
-            st.session_state.formatted_sql = None
+        # Store the current query in session state to persist across reruns
+        if sql_query != st.session_state.current_sql_query:
+            st.session_state.current_sql_query = sql_query
         
         # Add JavaScript to handle tab key in textarea
         st.components.v1.html("""
@@ -758,8 +763,9 @@ elif st.session_state.current_page == "Optimizer":
         if st.button("Format SQL", use_container_width=True, help="Clean up SQL formatting with proper indentation and capitalization"):
             if sql_query.strip():
                 formatted_sql = format_sql(sql_query)
-                # Update the query with formatted version
+                # Update both the formatted SQL and current query state
                 st.session_state.formatted_sql = formatted_sql
+                st.session_state.current_sql_query = formatted_sql
                 st.rerun()
             else:
                 st.warning("Please enter SQL code to format")
