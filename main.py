@@ -11,27 +11,31 @@ OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 COOKIE_KEY = st.secrets["COOKIE_KEY"]
 ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]
 
-# === Skapa users.yaml om den inte finns ===
-USERS_FILE = "users.yaml"
-if not os.path.exists(USERS_FILE):
-    with open(USERS_FILE, "w") as f:
-        yaml.dump({
-            "credentials": {
-                "usernames": {}
-            },
-            "cookie": {
-                "expiry_days": 30,
-                "key": COOKIE_KEY,
-                "name": "sql_optimizer_login"
-            },
-            "preauthorized": {
-                "emails": []
-            }
-        }, f)
 
-# === Ladda konfiguration från users.yaml ===
-with open(USERS_FILE) as file:
-    config = yaml.safe_load(file)
+USERS_FILE = "users.yaml"
+
+# === Initiera standardkonfiguration om users.yaml saknas eller är tom ===
+if not os.path.exists(USERS_FILE):
+    config = {
+        "credentials": {"usernames": {}},
+        "cookie": {"expiry_days": 30, "key": COOKIE_KEY, "name": "sql_optimizer_login"},
+        "preauthorized": {"emails": []}
+    }
+    with open(USERS_FILE, "w") as f:
+        yaml.dump(config, f)
+else:
+    with open(USERS_FILE) as f:
+        config = yaml.safe_load(f)
+
+    # Om nycklar saknas, skapa om config
+    if "credentials" not in config or "usernames" not in config.get("credentials", {}):
+        config = {
+            "credentials": {"usernames": {}},
+            "cookie": {"expiry_days": 30, "key": COOKIE_KEY, "name": "sql_optimizer_login"},
+            "preauthorized": {"emails": []}
+        }
+        with open(USERS_FILE, "w") as f:
+            yaml.dump(config, f)
 
 # === Autentisering ===
 authenticator = stauth.Authenticate(
