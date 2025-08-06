@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1
 import openai
 import tiktoken
 from datetime import datetime, timedelta
@@ -49,11 +50,17 @@ st.markdown("""
     }
     
     .query-container {
-        background: #f8f9fa;
+        background: transparent;
         padding: 2rem;
         border-radius: 15px;
         border: 1px solid #e9ecef;
         margin: 1rem 0;
+    }
+    
+    /* Fix text area styling */
+    .stTextArea textarea {
+        font-family: 'Courier New', monospace !important;
+        tab-size: 4 !important;
     }
     
     .sidebar .element-container {
@@ -487,8 +494,42 @@ elif st.session_state.current_page == "Optimizer":
             "SQL Query", 
             height=300, 
             placeholder="Paste your SQL query here...\n\nExample:\nSELECT u.name, COUNT(o.id) as order_count\nFROM users u\nLEFT JOIN orders o ON u.id = o.user_id\nGROUP BY u.name\nORDER BY order_count DESC;",
-            help="Enter your SQL query to analyze, optimize, or get explanations"
+            help="Enter your SQL query to analyze, optimize, or get explanations",
+            key="sql_input"
         )
+        
+        # Add JavaScript to handle tab key in textarea
+        st.components.v1.html("""
+        <script>
+        function enableTabs() {
+            const textarea = parent.document.querySelector('textarea[aria-label="SQL Query"]');
+            if (textarea) {
+                textarea.addEventListener('keydown', function(e) {
+                    if (e.key === 'Tab') {
+                        e.preventDefault();
+                        const start = this.selectionStart;
+                        const end = this.selectionEnd;
+                        const value = this.value;
+                        
+                        // Insert 4 spaces at cursor position
+                        this.value = value.substring(0, start) + '    ' + value.substring(end);
+                        
+                        // Move cursor after the inserted spaces
+                        this.selectionStart = this.selectionEnd = start + 4;
+                        
+                        // Trigger change event
+                        this.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                });
+            }
+        }
+        
+        // Try to enable tabs after a short delay
+        setTimeout(enableTabs, 500);
+        setTimeout(enableTabs, 1000);
+        setTimeout(enableTabs, 2000);
+        </script>
+        """, height=0)
     
     with col2:
         task = st.selectbox(
