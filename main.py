@@ -537,56 +537,154 @@ elif st.session_state.current_page == "Optimizer":
                 return len(enc.encode(text))
             
             prompt_templates = {
-                "Explain": f"""You are an expert SQL instructor.
+                "Explain": f"""You are a senior database architect with 15+ years of experience across multiple database systems.
 
-Explain this SQL query step-by-step, including:
-- The purpose of the query
-- What each clause does
-- The role of each table and join
-- Any assumptions about the data
+Your task is to provide a comprehensive analysis of the following SQL query for a database professional.
 
-Don't talk like an AI bot.
+Please structure your response as follows:
 
-SQL Query:
-{sql_query}
-""",
-                "Detect Issues": f"""You are a senior SQL code reviewer.
+1. QUERY PURPOSE
+   - What business problem this query solves
+   - Expected output and use case
 
-Analyze the following SQL query and list:
-- Performance problems
-- Poor practices
-- Logical issues
-- Suggestions for improvement
+2. EXECUTION BREAKDOWN
+   - Step-by-step execution order with explanations
+   - How the query engine processes each clause
+   - Data flow between operations
 
-Don't talk like an AI bot.
+3. TECHNICAL ANALYSIS
+   - Table relationships and join types
+   - Filtering and aggregation logic
+   - Potential index usage patterns
 
-SQL Query:
-{sql_query}
-""",
-                "Optimize": f"""You are a SQL performance expert.
+4. PERFORMANCE CONSIDERATIONS
+   - Query complexity assessment
+   - Likely bottlenecks or expensive operations
+   - Scalability implications
 
-Review the query below and:
-1. Suggest how to optimize it
-2. Provide a revised version
-3. Explain why your changes help
+5. ASSUMPTIONS & DEPENDENCIES
+   - Required table structures
+   - Data distribution assumptions
+   - Missing context that might affect analysis
 
-Don't talk like an AI bot.
+Provide specific, actionable insights rather than generic explanations. Use technical terminology appropriately.
 
 SQL Query:
-{sql_query}
-""",
-                "Test": f"""You are a SQL testing expert.
+{sql_query}""",
 
-Generate:
-- 3 to 5 rows of sample data for each table used
-- Expected result set based on the query
-- Brief notes on how the data satisfies the query logic
+                "Detect Issues": f"""You are a senior database performance consultant specializing in SQL code review and optimization.
 
-Don't talk like an AI bot.
+Analyze the following query and identify issues across these categories:
+
+1. PERFORMANCE ISSUES
+   - Inefficient joins or subqueries
+   - Missing or misused indexes
+   - Unnecessary data processing
+   - Scalability concerns
+
+2. SECURITY VULNERABILITIES
+   - SQL injection risks
+   - Excessive permissions required
+   - Data exposure concerns
+
+3. MAINTAINABILITY PROBLEMS
+   - Code readability issues
+   - Hard-coded values
+   - Complex logic that could be simplified
+   - Missing documentation needs
+
+4. BEST PRACTICE VIOLATIONS
+   - SQL standard deviations
+   - Database-specific anti-patterns
+   - Naming convention issues
+   - Resource management concerns
+
+For each issue identified:
+- Rate severity: CRITICAL, HIGH, MEDIUM, LOW
+- Explain the potential impact
+- Provide specific remediation steps
+- Suggest alternative approaches where applicable
+
+If no issues are found, explain why the query follows good practices.
 
 SQL Query:
-{sql_query}
-"""
+{sql_query}""",
+
+                "Optimize": f"""You are a database performance specialist with expertise in query optimization across multiple database platforms.
+
+Your task is to optimize the following SQL query for better performance.
+
+Please provide:
+
+1. PERFORMANCE ANALYSIS
+   - Current query execution approach
+   - Identify performance bottlenecks
+   - Estimated relative cost of each operation
+
+2. OPTIMIZATION STRATEGY
+   - Primary optimization opportunities
+   - Index recommendations (existing and new)
+   - Query structure improvements
+   - Alternative algorithmic approaches
+
+3. OPTIMIZED VERSION
+   - Rewritten query with improvements
+   - Explanation of each change made
+   - Expected performance impact
+
+4. IMPLEMENTATION NOTES
+   - Database-specific considerations
+   - Index creation statements if needed
+   - Testing recommendations
+   - Monitoring suggestions
+
+5. TRADE-OFF ANALYSIS
+   - Performance vs readability
+   - Memory vs CPU usage
+   - Optimization maintenance overhead
+
+Assume a medium-to-large dataset unless obvious otherwise. Focus on scalable solutions.
+
+Original SQL Query:
+{sql_query}""",
+
+                "Test": f"""You are a database testing specialist responsible for comprehensive SQL query validation.
+
+Create a complete test suite for the following query:
+
+1. TEST DATA DESIGN
+   - Generate 5-8 rows of realistic sample data for each table
+   - Include edge cases: nulls, empty strings, boundary values
+   - Represent different data scenarios (high/low volumes, various patterns)
+
+2. EXPECTED RESULTS
+   - Show the complete expected output for your test data
+   - Explain the logic for each result row
+   - Highlight any complex calculations or transformations
+
+3. EDGE CASE SCENARIOS
+   - Empty table conditions
+   - Single row scenarios  
+   - Null value handling
+   - Data type boundary conditions
+   - Large dataset implications
+
+4. VALIDATION CRITERIA
+   - Data accuracy checks
+   - Performance benchmarks
+   - Resource usage expectations
+   - Error condition handling
+
+5. TEST EXECUTION PLAN
+   - Step-by-step testing approach
+   - Required test environment setup
+   - Success/failure criteria
+   - Regression testing considerations
+
+Format the test data as proper INSERT statements and expected results as formatted tables.
+
+SQL Query to Test:
+{sql_query}"""
             }
             
             prompt = prompt_templates[task]
