@@ -20,8 +20,16 @@ if not users_file.exists():
 with users_file.open("r") as f:
     config = yaml.safe_load(f)
 
-if config is None:
-    config = {"credentials": {"usernames": {}}}
+if not config or "credentials" not in config:
+    config = {
+        "credentials": {"usernames": {}},
+        "cookie": {
+            "expiry_days": 30,
+            "key": COOKIE_KEY,
+            "name": "sql_optimizer_login"
+        },
+        "preauthorized": {"emails": []}
+    }
 
 authenticator = stauth.Authenticate(
     config,
