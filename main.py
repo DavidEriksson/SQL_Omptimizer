@@ -1,4 +1,169 @@
-import streamlit as st
+for query in recent_queries:
+                    email, task, timestamp = query
+                    query_time = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+                    time_ago = datetime.now() - query_time
+                    
+                    if time_ago.seconds < 60:
+                        time_str = f"{time_ago.seconds}s ago"
+                    elif time_ago.seconds < 3600:
+                        time_str = f"{time_ago.seconds//60}m ago"
+                    else:
+                        time_str = f"{time_ago.seconds//3600}h ago"
+                    
+                    st.markdown(f"**{email}** used *{task}* {time_str}")
+            else:
+                st.info("No recent activity")
+    
+    with tab2:
+        if analytics_data['top_users']:
+            df_users = pd.DataFrame(analytics_data['top_users'], columns=['Email', 'Name', 'Query Count'])
+            st.dataframe(df_users, use_container_width=True)
+        else:
+            st.info("No user data available yet")
+    
+    with tab3:
+        col_task1, col_task2 = st.columns([1, 1])
+        
+        with col_task1:
+            if analytics_data['queries_by_task']:
+                df_tasks = pd.DataFrame(analytics_data['queries_by_task'], columns=['Task Type', 'Count'])
+                st.bar_chart(df_tasks.set_index('Task Type'), use_container_width=True)
+        
+        with col_task2:
+            if analytics_data['queries_by_task']:
+                st.dataframe(df_tasks, use_container_width=True)
+            else:
+                st.info("No task data available yet")
+    
+    with tab4:
+        if analytics_data['recent_errors']:
+            df_errors = pd.DataFrame(analytics_data['recent_errors'], 
+                                   columns=['User Email', 'Task Type', 'Error', 'Timestamp'])
+            st.dataframe(df_errors, use_container_width=True)
+        else:
+            st.success("No recent errors!")
+
+elif st.session_state.current_page == "Users" and st.session_state.is_admin:
+    # User Management page
+    st.markdown("## User Management")
+    
+    tab1, tab2, tab3 = st.tabs(["All Users", "Manage Users", "User Analytics"])
+    
+    with tab1:
+        st.markdown("#### All Registered Users")
+        cursor.execute('SELECT email, name, admin FROM users')
+        users = cursor.fetchall()
+        
+        if users:
+            df = pd.DataFrame(users, columns=['Email', 'Name', 'Admin Status'])
+            df['Admin Status'] = df['Admin Status'].map({1: 'Admin', 0: 'User', None: 'User'})
+            st.dataframe(df, use_container_width=True)
+            st.caption(f"Total users: {len(users)}")
+        else:
+            st.info("No users found")
+    
+    with tab2:
+        col_manage1, col_manage2 = st.columns(2)
+        
+        with col_manage1:
+            st.markdown("#### Grant Admin Access")
+            cursor.execute('SELECT email, name FROM users WHERE admin = 0 OR admin IS NULL')
+            regular_users = cursor.fetchall()
+            
+            if regular_users:
+                user_options = [f"{user[1]} ({user[0]})" for user in regular_users]
+                selected_user_idx = st.selectbox("Select user:", range(len(user_options)), 
+                                                format_func=lambda x: user_options[x])
+                selected_email = regular_users[selected_user_idx][0]
+                
+                if st.button("Grant Admin Access", use_container_width=True, type="primary"):
+                    cursor.execute('UPDATE users SET admin = 1 WHERE email = ?', (selected_email,))
+                    conn.commit()
+                    st.success(f"{selected_email} is now an admin!")
+                    st.rerun()
+            else:
+                st.info("All users are already admins")
+        
+        with col_manage2:
+            st.markdown("#### Remove User")
+            cursor.execute('SELECT email, name FROM users')
+            all_users = cursor.fetchall()
+            
+            if len(all_users) > 1:
+                user_options_delete = [f"{user[1]} ({user[0]})" for user in all_users]
+                selected_user_delete_idx = st.selectbox("Select user to delete:", range(len(user_options_delete)), 
+                                                       format_func=lambda x: user_options_delete[x], key="delete_user")
+                selected_email_delete = all_users[selected_user_delete_idx][0]
+                
+                if selected_email_delete != st.session_state.user_email:
+                    if st.button("Delete User", use_container_width=True, type="secondary"):
+                        cursor.execute('DELETE FROM users WHERE email = ?', (selected_email_delete,))
+                        conn.commit()
+                        st.success(f"User {selected_email_delete} deleted!")
+                        st.rerun()
+                else:
+                    st.error("Cannot delete your own account!")
+            else:
+                st.info("Cannot delete users - you're the only one!")
+    
+    with tab3:
+        st.markdown("#### Individual User Statistics")
+        
+        # User activity breakdown
+        cursor.execute('''
+        SELECT 
+            u.email, u.name,
+            COUNT(ql.id) as total_queries,
+            SUM(CASE WHEN ql.success = 1 THEN 1 ELSE 0 END) as successful_queries,
+            MAX(ql.timestamp) as last_activity
+        FROM users u
+        LEFT JOIN query_logs ql ON u.email = ql.user_email
+        GROUP BY u.email, u.name
+        ORDER BY total_queries DESC
+        ''')
+        
+        user_stats = cursor.fetchall()
+        
+        if user_stats:
+            for stat in user_stats:
+                email, name, total, success, last_activity = stat
+                success_rate = (success / total * 100) if total > 0 else 0
+                
+                with st.expander(f"{name} ({email})"):
+                    col_stat1, col_stat2, col_stat3 = st.columns(3)
+                    
+                    with col_stat1:
+                        st.metric("Total Queries", total or 0)
+                    with col_stat2:
+                        st.metric("Success Rate", f"{success_rate:.1f}%" if total > 0 else "N/A")
+                    with col_stat3:
+                        st.metric("Last Activity", last_activity or "Never")
+                    
+                    if total > 0:
+                        # Get task breakdown for this user
+                        cursor.execute('''
+                        SELECT task_type, COUNT(*) as count
+                        FROM query_logs 
+                        WHERE user_email = ?
+                        GROUP BY task_type
+                        ''', (email,))
+                        
+                        user_tasks = cursor.fetchall()
+                        if user_tasks:
+                            st.markdown("**Task Breakdown:**")
+                            for task, count in user_tasks:
+                                st.markdown(f"- {task}: {count} queries")
+        else:
+            st.info("No user activity data available")
+
+# === Footer ===
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; color: #666; padding: 2rem 0;">
+    <p>SQL Optimizer AI - Powered by GPT-4o Mini</p>
+    <p>Built with Streamlit</p>
+</div>
+""", unsafe_allow_html=True)import streamlit as st
 import streamlit.components.v1
 import openai
 import tiktoken
@@ -14,7 +179,7 @@ ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]  # list of admin emails
 # === Page Configuration ===
 st.set_page_config(
     page_title="SQL Optimizer AI",
-    page_icon="🔍",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -272,12 +437,13 @@ def format_sql(sql_query):
         'UNIQUE', 'CHECK', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'OUTER', 'CROSS'
     ]
     
-    # Remove extra whitespace and normalize
+    # Normalize whitespace but preserve asterisks and other special characters
     formatted = ' '.join(sql_query.split())
     
-    # Capitalize keywords (case-insensitive replacement)
+    # Capitalize keywords (case-insensitive replacement) - be more careful with word boundaries
+    import re
     for keyword in keywords:
-        import re
+        # Use word boundaries but be careful not to affect special characters
         pattern = r'\b' + re.escape(keyword) + r'\b'
         formatted = re.sub(pattern, keyword, formatted, flags=re.IGNORECASE)
     
@@ -291,9 +457,12 @@ def format_sql(sql_query):
                      'UNION', 'UNION ALL', 'WITH']
     join_keywords = ['JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'FULL JOIN', 'CROSS JOIN']
     
-    words = formatted.split()
-    i = 0
+    # Split into tokens while preserving special characters
+    tokens = re.findall(r'\w+|\*|[^\w\s]|\s+', formatted)
+    # Filter out whitespace-only tokens and normalize
+    words = [token.strip() for token in tokens if token.strip()]
     
+    i = 0
     while i < len(words):
         word = words[i]
         
@@ -309,12 +478,8 @@ def format_sql(sql_query):
                         current_line = ""
                     
                     # Start new line with keyword
-                    if keyword in join_keywords:
-                        current_line = keyword
-                        i += len(keyword_parts)
-                    else:
-                        current_line = keyword
-                        i += len(keyword_parts)
+                    current_line = keyword
+                    i += len(keyword_parts)
                     keyword_found = True
                     break
         
@@ -334,7 +499,10 @@ def format_sql(sql_query):
                 lines.append('    ' * indent_level + current_line.strip())
                 current_line = ""
             else:
-                current_line += ' ' + word if current_line else word
+                # Add word with proper spacing, preserving special characters like *
+                if current_line and not current_line.endswith((' ', '(')):
+                    current_line += ' '
+                current_line += word
         
         i += 1
     
@@ -345,11 +513,11 @@ def format_sql(sql_query):
     # Join lines and clean up
     result = '\n'.join(lines)
     
-    # Clean up extra spaces and fix common formatting issues
-    result = re.sub(r'\s+', ' ', result)  # Multiple spaces to single space
-    result = re.sub(r' ,', ',', result)   # Space before comma
-    result = re.sub(r'\( ', '(', result)  # Space after opening parenthesis  
-    result = re.sub(r' \)', ')', result)  # Space before closing parenthesis
+    # Clean up formatting but preserve special characters
+    result = re.sub(r' +', ' ', result)      # Multiple spaces to single space
+    result = re.sub(r' ,', ',', result)      # Space before comma
+    result = re.sub(r'\( ', '(', result)     # Space after opening parenthesis  
+    result = re.sub(r' \)', ')', result)     # Space before closing parenthesis
     result = re.sub(r',([^\s])', r', \1', result)  # Add space after comma if missing
     
     # Fix line breaks
@@ -391,7 +559,7 @@ if "formatted_sql" not in st.session_state:
 # === Header ===
 st.markdown("""
 <div class="main-header">
-    <h1>🔍 SQL Optimizer AI</h1>
+    <h1>SQL Optimizer AI</h1>
     <p>Analyze, optimize, and understand your SQL queries with AI-powered insights</p>
 </div>
 """, unsafe_allow_html=True)
@@ -409,7 +577,7 @@ if not st.session_state.logged_in:
             with st.form("login_form"):
                 email = st.text_input("Email", placeholder="Enter your email")
                 password = st.text_input("Password", type="password", placeholder="Enter your password")
-                login_button = st.form_submit_button("🚀 Login", use_container_width=True)
+                login_button = st.form_submit_button("Login", use_container_width=True)
 
             if login_button:
                 user = get_user(email)
@@ -422,21 +590,21 @@ if not st.session_state.logged_in:
                         st.session_state.is_admin = False
                     st.rerun()
                 else:
-                    st.error("❌ Invalid email or password")
+                    st.error("Invalid email or password")
 
         with auth_tab2:
             with st.form("register_form"):
                 new_email = st.text_input("Email", placeholder="Enter your email")
                 new_name = st.text_input("Full Name", placeholder="Enter your full name")
                 new_password = st.text_input("Password", type="password", placeholder="Create a password")
-                register_button = st.form_submit_button("✨ Create Account", use_container_width=True)
+                register_button = st.form_submit_button("Create Account", use_container_width=True)
 
             if register_button:
                 if get_user(new_email):
-                    st.error("❌ Email already exists")
+                    st.error("Email already exists")
                 else:
                     add_user(new_email, new_name, new_password)
-                    st.success("✅ Account created successfully! Please log in.")
+                    st.success("Account created successfully! Please log in.")
 
         # Add some info cards
         st.markdown("---")
@@ -445,7 +613,7 @@ if not st.session_state.logged_in:
         with col_info1:
             st.markdown("""
             <div class="metric-container">
-                <h4>🔍 Analyze</h4>
+                <h4>Analyze</h4>
                 <p>Get detailed explanations of your SQL queries</p>
             </div>
             """, unsafe_allow_html=True)
@@ -453,7 +621,7 @@ if not st.session_state.logged_in:
         with col_info2:
             st.markdown("""
             <div class="metric-container">
-                <h4>⚡ Optimize</h4>
+                <h4>Optimize</h4>
                 <p>Improve query performance with AI suggestions</p>
             </div>
             """, unsafe_allow_html=True)
@@ -461,7 +629,7 @@ if not st.session_state.logged_in:
         with col_info3:
             st.markdown("""
             <div class="metric-container">
-                <h4>🧪 Test</h4>
+                <h4>Test</h4>
                 <p>Generate test data and validate your queries</p>
             </div>
             """, unsafe_allow_html=True)
@@ -472,29 +640,29 @@ if not st.session_state.logged_in:
 with st.sidebar:
     st.markdown(f"""
     <div class="status-card">
-        <h3>👋 Welcome</h3>
+        <h3>Welcome</h3>
         <p><strong>{st.session_state.user_email}</strong></p>
-        <p>{"👑 Admin Account" if st.session_state.is_admin else "👤 Standard User"}</p>
+        <p>{"Admin Account" if st.session_state.is_admin else "Standard User"}</p>
     </div>
     """, unsafe_allow_html=True)
     
-    st.markdown("### 🧭 Navigation")
+    st.markdown("### Navigation")
     
     # Navigation buttons
-    if st.button("🏠 Home", key="nav_home", use_container_width=True):
+    if st.button("Home", key="nav_home", use_container_width=True):
         st.session_state.current_page = "Home"
         st.rerun()
     
-    if st.button("🔍 SQL Optimizer", key="nav_optimizer", use_container_width=True):
+    if st.button("SQL Optimizer", key="nav_optimizer", use_container_width=True):
         st.session_state.current_page = "Optimizer"
         st.rerun()
     
     if st.session_state.is_admin:
-        if st.button("📊 Analytics", key="nav_analytics", use_container_width=True):
+        if st.button("Analytics", key="nav_analytics", use_container_width=True):
             st.session_state.current_page = "Analytics"
             st.rerun()
         
-        if st.button("👥 User Management", key="nav_users", use_container_width=True):
+        if st.button("User Management", key="nav_users", use_container_width=True):
             st.session_state.current_page = "Users"
             st.rerun()
     
@@ -507,7 +675,7 @@ with st.sidebar:
             st.session_state.query_count = 0
             st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
         
-        st.markdown("### 📊 Usage")
+        st.markdown("### Usage")
         progress = st.session_state.query_count / 5
         st.progress(progress)
         st.markdown(f"**{st.session_state.query_count}/5** queries used today")
@@ -515,18 +683,18 @@ with st.sidebar:
         reset_in = st.session_state.query_reset_time - datetime.now()
         hours = reset_in.seconds // 3600
         minutes = (reset_in.seconds % 3600) // 60
-        st.caption(f"⏰ Resets in: {hours}h {minutes}m")
+        st.caption(f"Resets in: {hours}h {minutes}m")
         
         if st.session_state.query_count >= 5:
-            st.error("❌ Daily limit reached")
+            st.error("Daily limit reached")
     else:
-        st.success("♾️ Unlimited queries")
+        st.success("Unlimited queries")
     
     st.markdown("---")
     
     # Settings
-    st.markdown("### ⚙️ Settings")
-    if st.button("🚪 Logout", use_container_width=True, type="secondary"):
+    st.markdown("### Settings")
+    if st.button("Logout", use_container_width=True, type="secondary"):
         st.session_state.logged_in = False
         st.session_state.user_email = None
         st.session_state.is_admin = False
@@ -539,23 +707,23 @@ if st.session_state.current_page == "Home":
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        st.markdown("## 🎯 Quick Start")
+        st.markdown("## Quick Start")
         
         # Quick actions
         col_action1, col_action2 = st.columns(2)
         
         with col_action1:
-            if st.button("🔍 Start Analyzing SQL", use_container_width=True, type="primary"):
+            if st.button("Start Analyzing SQL", use_container_width=True, type="primary"):
                 st.session_state.current_page = "Optimizer"
                 st.rerun()
         
         with col_action2:
-            if st.session_state.is_admin and st.button("📊 View Analytics", use_container_width=True):
+            if st.session_state.is_admin and st.button("View Analytics", use_container_width=True):
                 st.session_state.current_page = "Analytics"
                 st.rerun()
         
         # Recent activity if available
-        st.markdown("## 📈 Recent Activity")
+        st.markdown("## Recent Activity")
         cursor.execute('''
         SELECT task_type, timestamp 
         FROM query_logs 
@@ -568,12 +736,12 @@ if st.session_state.current_page == "Home":
         if recent_activity:
             for activity in recent_activity:
                 task, timestamp = activity
-                st.markdown(f"- 🔹 **{task}** query on {timestamp}")
+                st.markdown(f"- **{task}** query on {timestamp}")
         else:
             st.info("No recent activity. Start by analyzing your first SQL query!")
     
     with col2:
-        st.markdown("## 📊 Your Stats")
+        st.markdown("## Your Stats")
         
         # User's personal stats
         cursor.execute('SELECT COUNT(*) FROM query_logs WHERE user_email = ?', (st.session_state.user_email,))
@@ -592,7 +760,7 @@ if st.session_state.current_page == "Home":
 
 elif st.session_state.current_page == "Optimizer":
     # SQL Optimizer page
-    st.markdown("## 🔍 SQL Query Optimizer")
+    st.markdown("## SQL Query Optimizer")
     
     # Main optimizer interface
     st.markdown("""
@@ -725,16 +893,16 @@ elif st.session_state.current_page == "Optimizer":
         
         # Task descriptions
         task_descriptions = {
-            "Explain": "🔍 Get a detailed step-by-step explanation",
-            "Optimize": "⚡ Improve performance and efficiency", 
-            "Detect Issues": "🔎 Find problems and bad practices",
-            "Test": "🧪 Generate test data and expected results"
+            "Explain": "Get a detailed step-by-step explanation",
+            "Optimize": "Improve performance and efficiency", 
+            "Detect Issues": "Find problems and bad practices",
+            "Test": "Generate test data and expected results"
         }
         
         st.info(task_descriptions[task])
         
         # Format SQL button
-        if st.button("✨ Format SQL", use_container_width=True, help="Clean up SQL formatting with proper indentation and capitalization"):
+        if st.button("Format SQL", use_container_width=True, help="Clean up SQL formatting with proper indentation and capitalization"):
             if sql_query.strip():
                 formatted_sql = format_sql(sql_query)
                 # Update the query with formatted version
@@ -744,7 +912,7 @@ elif st.session_state.current_page == "Optimizer":
                 st.warning("Please enter SQL code to format")
         
         analyze_button = st.button(
-            "🚀 Analyze Query", 
+            "Analyze Query", 
             use_container_width=True, 
             type="primary",
             disabled=(not st.session_state.is_admin and st.session_state.query_count >= 5)
@@ -755,9 +923,9 @@ elif st.session_state.current_page == "Optimizer":
     # Process the query
     if analyze_button:
         if not sql_query.strip():
-            st.error("❌ Please enter a SQL query.")
+            st.error("Please enter a SQL query.")
         elif not st.session_state.is_admin and st.session_state.query_count >= 5:
-            st.error("❌ Daily query limit reached. Limit resets in 24 hours.")
+            st.error("Daily query limit reached. Limit resets in 24 hours.")
         else:
             if not st.session_state.is_admin:
                 st.session_state.query_count += 1
@@ -925,7 +1093,7 @@ SQL Query to Test:
             
             prompt = prompt_templates[task]
             
-            with st.spinner("🔍 Analyzing your SQL query..."):
+            with st.spinner("Analyzing your SQL query..."):
                 try:
                     token_estimate = estimate_tokens(prompt)
                     response = client.chat.completions.create(
@@ -945,10 +1113,10 @@ SQL Query to Test:
                         success=True
                     )
                     
-                    st.success("✅ Analysis complete!")
+                    st.success("Analysis complete!")
                     
                     # Results in a nice container
-                    st.markdown("### 📋 Analysis Results")
+                    st.markdown("### Analysis Results")
                     st.markdown(f"**Task:** {task}")
                     st.markdown("---")
                     st.markdown(reply)
@@ -956,11 +1124,11 @@ SQL Query to Test:
                     # Footer info
                     col_info1, col_info2, col_info3 = st.columns(3)
                     with col_info1:
-                        st.caption(f"🔢 Tokens used: {token_estimate}")
+                        st.caption(f"Tokens used: {token_estimate}")
                     with col_info2:
-                        st.caption(f"🤖 Model: {model}")
+                        st.caption(f"Model: {model}")
                     with col_info3:
-                        st.download_button("📋 Download Results", reply, file_name=f"sql_analysis_{task.lower()}.txt")
+                        st.download_button("Download Results", reply, file_name=f"sql_analysis_{task.lower()}.txt")
                     
                 except Exception as e:
                     # Log failed query
@@ -972,17 +1140,17 @@ SQL Query to Test:
                         error_message=str(e)
                     )
                     
-                    st.error(f"❌ Error: {str(e)}")
+                    st.error(f"Error: {str(e)}")
 
 elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
     # Analytics Dashboard
-    st.markdown("## 📊 Analytics Dashboard")
+    st.markdown("## Analytics Dashboard")
     
     # Refresh controls
     col_refresh1, col_refresh2, col_refresh3, col_refresh4 = st.columns([1, 1, 1, 2])
     
     with col_refresh1:
-        manual_refresh = st.button("🔄 Refresh", use_container_width=True)
+        manual_refresh = st.button("Refresh", use_container_width=True)
     
     with col_refresh2:
         auto_refresh = st.toggle("Auto-refresh")
@@ -1000,11 +1168,11 @@ elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
             age_seconds = (datetime.now() - last_update).total_seconds()
             
             if is_fresh:
-                st.success(f"🆕 Just updated!")
+                st.success(f"Just updated!")
             elif age_seconds < 60:
-                st.info(f"📊 Updated {int(age_seconds)}s ago")
+                st.info(f"Updated {int(age_seconds)}s ago")
             else:
-                st.warning(f"📊 Updated {int(age_seconds/60)}m ago")
+                st.warning(f"Updated {int(age_seconds/60)}m ago")
     
     # Auto-refresh logic
     if auto_refresh:
@@ -1014,19 +1182,19 @@ elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
                 st.rerun()
     
     # Key Metrics
-    st.markdown("### 📈 Key Metrics")
+    st.markdown("### Key Metrics")
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.metric(
-            label="👥 Total Users",
+            label="Total Users",
             value=analytics_data['total_users'],
             delta=f"{analytics_data['active_users_7d']} active (7d)"
         )
     
     with col2:
         st.metric(
-            label="🔍 Total Queries", 
+            label="Total Queries", 
             value=analytics_data['total_queries'],
             delta=f"{analytics_data['success_rate']:.1f}% success rate"
         )
@@ -1034,7 +1202,7 @@ elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
     with col3:
         estimated_cost = (analytics_data['total_tokens'] / 1000) * 0.000150
         st.metric(
-            label="💰 API Costs",
+            label="API Costs",
             value=f"${estimated_cost:.3f}",
             delta=f"{analytics_data['total_tokens']:,} tokens"
         )
@@ -1042,13 +1210,13 @@ elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
     with col4:
         popular_task = analytics_data['queries_by_task'][0][0] if analytics_data['queries_by_task'] else "None"
         st.metric(
-            label="🔥 Most Popular Task",
+            label="Most Popular Task",
             value=popular_task,
             delta=f"Avg {analytics_data['avg_query_length']} chars/query"
         )
     
     # Detailed Analytics
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Usage Trends", "👥 User Activity", "🔧 Task Types", "❌ Errors"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Usage Trends", "User Activity", "Task Types", "Errors"])
     
     with tab1:
         col_chart1, col_chart2 = st.columns([2, 1])
