@@ -253,7 +253,109 @@ def get_analytics_data():
     
     return analytics
 
-def get_analytics_data_cached(force_refresh=False):
+def format_sql(sql_query):
+    """Format SQL query with proper indentation and capitalization"""
+    if not sql_query.strip():
+        return sql_query
+    
+    # SQL keywords to capitalize
+    keywords = [
+        'SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN',
+        'FULL JOIN', 'CROSS JOIN', 'ON', 'AND', 'OR', 'NOT', 'IN', 'EXISTS', 'BETWEEN',
+        'LIKE', 'IS', 'NULL', 'GROUP BY', 'HAVING', 'ORDER BY', 'ASC', 'DESC', 'LIMIT',
+        'OFFSET', 'UNION', 'UNION ALL', 'INTERSECT', 'EXCEPT', 'WITH', 'AS', 'CASE',
+        'WHEN', 'THEN', 'ELSE', 'END', 'IF', 'DISTINCT', 'ALL', 'COUNT', 'SUM', 'AVG',
+        'MIN', 'MAX', 'SUBSTRING', 'CONCAT', 'COALESCE', 'CAST', 'CONVERT', 'INSERT',
+        'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'TABLE', 'INDEX', 'VIEW',
+        'PROCEDURE', 'FUNCTION', 'TRIGGER', 'DATABASE', 'SCHEMA', 'PRIMARY KEY',
+        'FOREIGN KEY', 'REFERENCES', 'CONSTRAINT', 'DEFAULT', 'AUTO_INCREMENT',
+        'UNIQUE', 'CHECK', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'OUTER', 'CROSS'
+    ]
+    
+    # Remove extra whitespace and normalize
+    formatted = ' '.join(sql_query.split())
+    
+    # Capitalize keywords (case-insensitive replacement)
+    for keyword in keywords:
+        import re
+        pattern = r'\b' + re.escape(keyword) + r'\b'
+        formatted = re.sub(pattern, keyword, formatted, flags=re.IGNORECASE)
+    
+    # Add line breaks and indentation
+    lines = []
+    indent_level = 0
+    current_line = ""
+    
+    # Split by major keywords that should start new lines
+    major_keywords = ['SELECT', 'FROM', 'WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 
+                     'UNION', 'UNION ALL', 'WITH']
+    join_keywords = ['JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'FULL JOIN', 'CROSS JOIN']
+    
+    words = formatted.split()
+    i = 0
+    
+    while i < len(words):
+        word = words[i]
+        
+        # Check for major keywords
+        keyword_found = False
+        for keyword in major_keywords + join_keywords:
+            keyword_parts = keyword.split()
+            if i + len(keyword_parts) <= len(words):
+                if ' '.join(words[i:i+len(keyword_parts)]).upper() == keyword:
+                    # Add current line if it has content
+                    if current_line.strip():
+                        lines.append('    ' * indent_level + current_line.strip())
+                        current_line = ""
+                    
+                    # Start new line with keyword
+                    if keyword in join_keywords:
+                        current_line = keyword
+                        i += len(keyword_parts)
+                    else:
+                        current_line = keyword
+                        i += len(keyword_parts)
+                    keyword_found = True
+                    break
+        
+        if not keyword_found:
+            if word.upper() == 'AND' and current_line.strip().upper().startswith(('WHERE', 'HAVING', 'ON')):
+                # Add AND on new line with extra indentation for readability
+                lines.append('    ' * indent_level + current_line.strip())
+                current_line = "    AND"
+            elif word == '(':
+                current_line += ' ' + word if current_line else word
+                indent_level += 1
+            elif word == ')':
+                indent_level = max(0, indent_level - 1)
+                current_line += word
+            elif word == ',':
+                current_line += word
+                lines.append('    ' * indent_level + current_line.strip())
+                current_line = ""
+            else:
+                current_line += ' ' + word if current_line else word
+        
+        i += 1
+    
+    # Add remaining line
+    if current_line.strip():
+        lines.append('    ' * indent_level + current_line.strip())
+    
+    # Join lines and clean up
+    result = '\n'.join(lines)
+    
+    # Clean up extra spaces and fix common formatting issues
+    result = re.sub(r'\s+', ' ', result)  # Multiple spaces to single space
+    result = re.sub(r' ,', ',', result)   # Space before comma
+    result = re.sub(r'\( ', '(', result)  # Space after opening parenthesis  
+    result = re.sub(r' \)', ')', result)  # Space before closing parenthesis
+    result = re.sub(r',([^\s])', r', \1', result)  # Add space after comma if missing
+    
+    # Fix line breaks
+    result = result.replace(' \n', '\n').replace('\n ', '\n')
+    
+    return result
     now = datetime.now()
     
     if (force_refresh or 
@@ -283,6 +385,8 @@ if "cached_analytics" not in st.session_state:
     st.session_state.cached_analytics = None
 if "current_page" not in st.session_state:
     st.session_state.current_page = "Home"
+if "formatted_sql" not in st.session_state:
+    st.session_state.formatted_sql = None
 
 # === Header ===
 st.markdown("""
@@ -498,13 +602,21 @@ elif st.session_state.current_page == "Optimizer":
     col1, col2 = st.columns([3, 1])
     
     with col1:
+        # Use formatted SQL if available, otherwise use empty string
+        default_value = st.session_state.formatted_sql if st.session_state.formatted_sql else ""
+        
         sql_query = st.text_area(
             "SQL Query", 
+            value=default_value,
             height=300, 
             placeholder="Paste your SQL query here...\n\nExample:\nSELECT u.name, COUNT(o.id) as order_count\nFROM users u\nLEFT JOIN orders o ON u.id = o.user_id\nGROUP BY u.name\nORDER BY order_count DESC;",
             help="Enter your SQL query to analyze, optimize, or get explanations",
             key="sql_input"
         )
+        
+        # Clear formatted SQL after it's been displayed
+        if st.session_state.formatted_sql:
+            st.session_state.formatted_sql = None
         
         # Add JavaScript to handle tab key in textarea
         st.components.v1.html("""
@@ -620,6 +732,16 @@ elif st.session_state.current_page == "Optimizer":
         }
         
         st.info(task_descriptions[task])
+        
+        # Format SQL button
+        if st.button("✨ Format SQL", use_container_width=True, help="Clean up SQL formatting with proper indentation and capitalization"):
+            if sql_query.strip():
+                formatted_sql = format_sql(sql_query)
+                # Update the query with formatted version
+                st.session_state.formatted_sql = formatted_sql
+                st.rerun()
+            else:
+                st.warning("Please enter SQL code to format")
         
         analyze_button = st.button(
             "🚀 Analyze Query", 
