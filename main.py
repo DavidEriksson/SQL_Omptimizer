@@ -24,6 +24,102 @@ CREATE TABLE IF NOT EXISTS users (
 ''')
 conn.commit()
 
+# === Analytics Database Setup ===
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS query_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_email TEXT NOT NULL,
+    task_type TEXT NOT NULL,
+    query_length INTEGER NOT NULL,
+    tokens_used INTEGER,
+    success BOOLEAN NOT NULL,
+    error_message TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_email) REFERENCES users(email)
+)
+''')
+conn.commit()
+
+def log_query(user_email, task_type, query_length, tokens_used=None, success=True, error_message=None):
+    """Log a query execution to the analytics table"""
+    cursor.execute('''
+    INSERT INTO query_logs (user_email, task_type, query_length, tokens_used, success, error_message)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ''', (user_email, task_type, query_length, tokens_used, success, error_message))
+    conn.commit()
+
+def get_analytics_data():
+    """Get various analytics data for the dashboard"""
+    analytics = {}
+    
+    # Total queries
+    cursor.execute('SELECT COUNT(*) FROM query_logs')
+    analytics['total_queries'] = cursor.fetchone()[0]
+    
+    # Success rate
+    cursor.execute('SELECT COUNT(*) FROM query_logs WHERE success = 1')
+    successful_queries = cursor.fetchone()[0]
+    analytics['success_rate'] = (successful_queries / analytics['total_queries'] * 100) if analytics['total_queries'] > 0 else 0
+    
+    # Queries by task type
+    cursor.execute('SELECT task_type, COUNT(*) FROM query_logs GROUP BY task_type ORDER BY COUNT(*) DESC')
+    analytics['queries_by_task'] = cursor.fetchall()
+    
+    # Queries by user (top 10)
+    cursor.execute('''
+    SELECT ql.user_email, u.name, COUNT(*) as query_count 
+    FROM query_logs ql 
+    LEFT JOIN users u ON ql.user_email = u.email 
+    GROUP BY ql.user_email 
+    ORDER BY query_count DESC 
+    LIMIT 10
+    ''')
+    analytics['top_users'] = cursor.fetchall()
+    
+    # Daily activity (last 30 days)
+    cursor.execute('''
+    SELECT DATE(timestamp) as date, COUNT(*) as queries 
+    FROM query_logs 
+    WHERE timestamp >= datetime('now', '-30 days')
+    GROUP BY DATE(timestamp) 
+    ORDER BY date DESC
+    ''')
+    analytics['daily_activity'] = cursor.fetchall()
+    
+    # Average query length
+    cursor.execute('SELECT AVG(query_length) FROM query_logs')
+    avg_length = cursor.fetchone()[0]
+    analytics['avg_query_length'] = round(avg_length, 0) if avg_length else 0
+    
+    # Total tokens used
+    cursor.execute('SELECT SUM(tokens_used) FROM query_logs WHERE tokens_used IS NOT NULL')
+    total_tokens = cursor.fetchone()[0]
+    analytics['total_tokens'] = total_tokens if total_tokens else 0
+    
+    # Recent errors
+    cursor.execute('''
+    SELECT user_email, task_type, error_message, timestamp 
+    FROM query_logs 
+    WHERE success = 0 
+    ORDER BY timestamp DESC 
+    LIMIT 10
+    ''')
+    analytics['recent_errors'] = cursor.fetchall()
+    
+    # User count
+    cursor.execute('SELECT COUNT(*) FROM users')
+    analytics['total_users'] = cursor.fetchone()[0]
+    
+    # Active users (users who made queries in last 7 days)
+    cursor.execute('''
+    SELECT COUNT(DISTINCT user_email) 
+    FROM query_logs 
+    WHERE timestamp >= datetime('now', '-7 days')
+    ''')
+    analytics['active_users_7d'] = cursor.fetchone()[0]
+    
+    return analytics
+
 def add_user(email, name, password, is_admin=False):
     hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     cursor.execute('''
@@ -89,7 +185,6 @@ if not st.session_state.logged_in:
 
     st.stop()
 
-# === Logged in ===
 # === Logged in ===
 st.success(f"👋 Welcome {st.session_state.user_email}")
 if st.session_state.is_admin:
@@ -157,6 +252,76 @@ if st.session_state.is_admin:
                         st.error("❌ Cannot delete your own account!")
             else:
                 st.info("Cannot delete users - you're the only one!")
+
+    
+    with st.expander("📊 Analytics Dashboard", expanded=True):
+        st.subheader("📈 Usage Analytics")
+        
+        # Get analytics data
+        analytics = get_analytics_data()
+        
+        # Key Metrics Row
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total Users", analytics['total_users'])
+            st.metric("Active Users (7d)", analytics['active_users_7d'])
+        
+        with col2:
+            st.metric("Total Queries", analytics['total_queries'])
+            st.metric("Success Rate", f"{analytics['success_rate']:.1f}%")
+        
+        with col3:
+            st.metric("Avg Query Length", f"{analytics['avg_query_length']} chars")
+            st.metric("Total Tokens Used", f"{analytics['total_tokens']:,}")
+        
+        with col4:
+            # Calculate estimated cost (GPT-4o-mini pricing)
+            estimated_cost = (analytics['total_tokens'] / 1000) * 0.000150  # $0.150 per 1K tokens
+            st.metric("Est. API Cost", f"${estimated_cost:.3f}")
+            
+            # Most popular task
+            if analytics['queries_by_task']:
+                popular_task = analytics['queries_by_task'][0][0]
+                st.metric("Most Popular Task", popular_task)
+        
+        # Charts and detailed data
+        tab1, tab2, tab3, tab4 = st.tabs(["📊 Usage Trends", "👥 User Activity", "🔧 Task Types", "❌ Errors"])
+        
+        with tab1:
+            st.subheader("Daily Query Volume (Last 30 Days)")
+            if analytics['daily_activity']:
+                import pandas as pd
+                df_daily = pd.DataFrame(analytics['daily_activity'], columns=['Date', 'Queries'])
+                st.bar_chart(df_daily.set_index('Date'))
+            else:
+                st.info("No data available yet")
+        
+        with tab2:
+            st.subheader("Top Active Users")
+            if analytics['top_users']:
+                df_users = pd.DataFrame(analytics['top_users'], columns=['Email', 'Name', 'Query Count'])
+                st.dataframe(df_users, use_container_width=True)
+            else:
+                st.info("No user data available yet")
+        
+        with tab3:
+            st.subheader("Queries by Task Type")
+            if analytics['queries_by_task']:
+                df_tasks = pd.DataFrame(analytics['queries_by_task'], columns=['Task Type', 'Count'])
+                st.bar_chart(df_tasks.set_index('Task Type'))
+                st.dataframe(df_tasks, use_container_width=True)
+            else:
+                st.info("No task data available yet")
+        
+        with tab4:
+            st.subheader("Recent Errors")
+            if analytics['recent_errors']:
+                df_errors = pd.DataFrame(analytics['recent_errors'], 
+                                       columns=['User Email', 'Task Type', 'Error', 'Timestamp'])
+                st.dataframe(df_errors, use_container_width=True)
+            else:
+                st.success("No recent errors! 🎉")
 
 # Reset query count if necessary
 if datetime.now() >= st.session_state.query_reset_time:
@@ -267,12 +432,32 @@ SQL Query:
                 max_tokens=max_tokens
             )
             reply = response.choices[0].message.content
+            
+            # Log successful query
+            log_query(
+                user_email=st.session_state.user_email,
+                task_type=task,
+                query_length=len(sql_query),
+                tokens_used=token_estimate,
+                success=True
+            )
+            
             st.success("✅ Analysis complete!")
             st.markdown("### Result")
             st.markdown(reply)
             st.caption(f"🔢 Estimated tokens: {token_estimate} • Model: {model}")
             st.download_button("📋 Copy Result", reply, file_name="sql_analysis.txt")
+            
         except Exception as e:
+            # Log failed query
+            log_query(
+                user_email=st.session_state.user_email,
+                task_type=task,
+                query_length=len(sql_query),
+                success=False,
+                error_message=str(e)
+            )
+            
             st.error(f"Error: {str(e)}")
 
     st.session_state.run_analysis = False
