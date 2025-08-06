@@ -22,7 +22,6 @@ CREATE TABLE IF NOT EXISTS users (
     admin BOOLEAN NULL
 )
 ''')
-conn.commit()
 
 # === Analytics Database Setup ===
 cursor.execute('''
@@ -39,6 +38,20 @@ CREATE TABLE IF NOT EXISTS query_logs (
 )
 ''')
 conn.commit()
+
+def add_user(email, name, password, is_admin=False):
+    hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    cursor.execute('''
+    INSERT INTO users (email, name, password, admin) VALUES (?, ?, ?, ?)
+    ''', (email, name, hashed_password, is_admin))
+    conn.commit()
+
+def get_user(email):
+    cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
+    return cursor.fetchone()
+
+def verify_password(stored_password, provided_password):
+    return bcrypt.checkpw(provided_password.encode(), stored_password.encode())
 
 def log_query(user_email, task_type, query_length, tokens_used=None, success=True, error_message=None):
     """Log a query execution to the analytics table"""
@@ -120,19 +133,26 @@ def get_analytics_data():
     
     return analytics
 
-def add_user(email, name, password, is_admin=False):
-    hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-    cursor.execute('''
-    INSERT INTO users (email, name, password, admin) VALUES (?, ?, ?, ?)
-    ''', (email, name, hashed_password, is_admin))
-    conn.commit()
-
-def get_user(email):
-    cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
-    return cursor.fetchone()
-
-def verify_password(stored_password, provided_password):
-    return bcrypt.checkpw(provided_password.encode(), stored_password.encode())
+def get_analytics_data_cached(force_refresh=False):
+    """Get analytics data with smart caching"""
+    now = datetime.now()
+    
+    # Check if we need to refresh (force refresh, or cache is older than 30 seconds)
+    if (force_refresh or 
+        st.session_state.last_analytics_update is None or 
+        now - st.session_state.last_analytics_update > timedelta(seconds=30)):
+        
+        # Get fresh data
+        analytics = get_analytics_data()
+        
+        # Cache it
+        st.session_state.cached_analytics = analytics
+        st.session_state.last_analytics_update = now
+        
+        return analytics, True  # True = fresh data
+    else:
+        # Return cached data
+        return st.session_state.cached_analytics, False  # False = cached data
 
 # === Streamlit UI ===
 st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
@@ -148,6 +168,10 @@ if "is_admin" not in st.session_state:
 if "query_count" not in st.session_state:
     st.session_state.query_count = 0
     st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
+if "last_analytics_update" not in st.session_state:
+    st.session_state.last_analytics_update = None
+if "cached_analytics" not in st.session_state:
+    st.session_state.cached_analytics = None
 
 # === Login/Register UI ===
 if not st.session_state.logged_in:
@@ -198,15 +222,159 @@ if st.sidebar.button("Logout"):
     st.session_state.is_admin = False
     st.rerun()
 
+# Reset query count if necessary
+if datetime.now() >= st.session_state.query_reset_time:
+    st.session_state.query_count = 0
+    st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
 
-# === Admin User Management ===
+if not st.session_state.is_admin:
+    st.sidebar.markdown("### 🔒 Usage Limit")
+    st.sidebar.markdown(f"Queries used: **{st.session_state.query_count}/5**")
+    reset_in = st.session_state.query_reset_time - datetime.now()
+    st.sidebar.caption(f"Resets in: {reset_in.seconds // 3600}h {(reset_in.seconds % 3600) // 60}m")
+
+# === Admin Analytics Dashboard ===
 if st.session_state.is_admin:
+    with st.expander("📊 Analytics Dashboard", expanded=True):
+        # Refresh controls
+        col_refresh1, col_refresh2, col_refresh3, col_refresh4 = st.columns([1, 1, 1, 2])
+        
+        with col_refresh1:
+            manual_refresh = st.button("🔄 Refresh")
+        
+        with col_refresh2:
+            auto_refresh = st.toggle("Auto-refresh", key="analytics_auto_refresh")
+        
+        with col_refresh3:
+            refresh_rate = st.selectbox("Rate (s)", [15, 30, 60], index=1, key="refresh_rate")
+        
+        # Get analytics data
+        analytics_data, is_fresh = get_analytics_data_cached(force_refresh=manual_refresh)
+        
+        # Show data freshness
+        with col_refresh4:
+            if st.session_state.last_analytics_update:
+                last_update = st.session_state.last_analytics_update
+                age_seconds = (datetime.now() - last_update).total_seconds()
+                
+                if is_fresh:
+                    st.success(f"🆕 Just updated!")
+                elif age_seconds < 60:
+                    st.info(f"📊 Updated {int(age_seconds)}s ago")
+                else:
+                    st.warning(f"📊 Updated {int(age_seconds/60)}m ago")
+        
+        # Auto-refresh logic
+        if auto_refresh:
+            st.info(f"🔄 Auto-refreshing every {refresh_rate} seconds...")
+            if st.session_state.last_analytics_update:
+                age = (datetime.now() - st.session_state.last_analytics_update).total_seconds()
+                if age >= refresh_rate:
+                    st.rerun()
+        
+        st.subheader("📈 Usage Analytics")
+        
+        # Add timestamp
+        if st.session_state.last_analytics_update:
+            st.caption(f"📅 Last updated: {st.session_state.last_analytics_update.strftime('%H:%M:%S')}")
+        
+        # Key Metrics Row  
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total Users", analytics_data['total_users'])
+            st.metric("Active Users (7d)", analytics_data['active_users_7d'])
+        
+        with col2:
+            st.metric("Total Queries", analytics_data['total_queries'])
+            st.metric("Success Rate", f"{analytics_data['success_rate']:.1f}%")
+        
+        with col3:
+            st.metric("Avg Query Length", f"{analytics_data['avg_query_length']} chars")
+            st.metric("Total Tokens Used", f"{analytics_data['total_tokens']:,}")
+        
+        with col4:
+            estimated_cost = (analytics_data['total_tokens'] / 1000) * 0.000150
+            st.metric("Est. API Cost", f"${estimated_cost:.3f}")
+            
+            if analytics_data['queries_by_task']:
+                popular_task = analytics_data['queries_by_task'][0][0]
+                st.metric("Most Popular Task", popular_task)
+        
+        # Live Activity Section
+        st.subheader("🔴 Live Activity")
+        cursor.execute('''
+        SELECT user_email, task_type, timestamp 
+        FROM query_logs 
+        WHERE timestamp >= datetime('now', '-1 hour')
+        ORDER BY timestamp DESC 
+        LIMIT 10
+        ''')
+        recent_queries = cursor.fetchall()
+        
+        if recent_queries:
+            for query in recent_queries:
+                email, task, timestamp = query
+                # Calculate time ago
+                query_time = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+                time_ago = datetime.now() - query_time
+                
+                if time_ago.seconds < 60:
+                    time_str = f"{time_ago.seconds}s ago"
+                elif time_ago.seconds < 3600:
+                    time_str = f"{time_ago.seconds//60}m ago"
+                else:
+                    time_str = f"{time_ago.seconds//3600}h ago"
+                
+                st.text(f"🔹 {email} used '{task}' {time_str}")
+        else:
+            st.info("No activity in the last hour")
+        
+        # Detailed Analytics Tabs
+        tab1, tab2, tab3, tab4 = st.tabs(["📊 Usage Trends", "👥 User Activity", "🔧 Task Types", "❌ Errors"])
+        
+        with tab1:
+            st.subheader("Daily Query Volume (Last 30 Days)")
+            if analytics_data['daily_activity']:
+                import pandas as pd
+                df_daily = pd.DataFrame(analytics_data['daily_activity'], columns=['Date', 'Queries'])
+                st.bar_chart(df_daily.set_index('Date'))
+            else:
+                st.info("No data available yet")
+        
+        with tab2:
+            st.subheader("Top Active Users")
+            if analytics_data['top_users']:
+                df_users = pd.DataFrame(analytics_data['top_users'], columns=['Email', 'Name', 'Query Count'])
+                st.dataframe(df_users, use_container_width=True)
+            else:
+                st.info("No user data available yet")
+        
+        with tab3:
+            st.subheader("Queries by Task Type")
+            if analytics_data['queries_by_task']:
+                df_tasks = pd.DataFrame(analytics_data['queries_by_task'], columns=['Task Type', 'Count'])
+                st.bar_chart(df_tasks.set_index('Task Type'))
+                st.dataframe(df_tasks, use_container_width=True)
+            else:
+                st.info("No task data available yet")
+        
+        with tab4:
+            st.subheader("Recent Errors")
+            if analytics_data['recent_errors']:
+                df_errors = pd.DataFrame(analytics_data['recent_errors'], 
+                                       columns=['User Email', 'Task Type', 'Error', 'Timestamp'])
+                st.dataframe(df_errors, use_container_width=True)
+            else:
+                st.success("No recent errors! 🎉")
+
+    # === Admin User Management ===
     with st.expander("👑 Admin: User Management"):
         tab1, tab2 = st.tabs(["View Users", "Manage Users"])
         
         with tab1:
             st.subheader("All Users")
-            cursor.execute('SELECT email, name, is_admin FROM users')
+            cursor.execute('SELECT email, name, admin FROM users')
             users = cursor.fetchall()
             
             if users:
@@ -219,7 +387,7 @@ if st.session_state.is_admin:
         
         with tab2:
             st.subheader("Make User Admin")
-            cursor.execute('SELECT email, name FROM users WHERE is_admin = 0 OR is_admin IS NULL')
+            cursor.execute('SELECT email, name FROM users WHERE admin = 0 OR admin IS NULL')
             regular_users = cursor.fetchall()
             
             if regular_users:
@@ -227,7 +395,7 @@ if st.session_state.is_admin:
                 selected_email = st.selectbox("Select user to make admin:", user_emails)
                 
                 if st.button("Grant Admin Access"):
-                    cursor.execute('UPDATE users SET is_admin = 1 WHERE email = ?', (selected_email,))
+                    cursor.execute('UPDATE users SET admin = 1 WHERE email = ?', (selected_email,))
                     conn.commit()
                     st.success(f"✅ {selected_email} is now an admin!")
                     st.rerun()
@@ -252,87 +420,6 @@ if st.session_state.is_admin:
                         st.error("❌ Cannot delete your own account!")
             else:
                 st.info("Cannot delete users - you're the only one!")
-
-    
-    with st.expander("📊 Analytics Dashboard", expanded=True):
-        st.subheader("📈 Usage Analytics")
-        
-        # Get analytics data
-        analytics = get_analytics_data()
-        
-        # Key Metrics Row
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Total Users", analytics['total_users'])
-            st.metric("Active Users (7d)", analytics['active_users_7d'])
-        
-        with col2:
-            st.metric("Total Queries", analytics['total_queries'])
-            st.metric("Success Rate", f"{analytics['success_rate']:.1f}%")
-        
-        with col3:
-            st.metric("Avg Query Length", f"{analytics['avg_query_length']} chars")
-            st.metric("Total Tokens Used", f"{analytics['total_tokens']:,}")
-        
-        with col4:
-            # Calculate estimated cost (GPT-4o-mini pricing)
-            estimated_cost = (analytics['total_tokens'] / 1000) * 0.000150  # $0.150 per 1K tokens
-            st.metric("Est. API Cost", f"${estimated_cost:.3f}")
-            
-            # Most popular task
-            if analytics['queries_by_task']:
-                popular_task = analytics['queries_by_task'][0][0]
-                st.metric("Most Popular Task", popular_task)
-        
-        # Charts and detailed data
-        tab1, tab2, tab3, tab4 = st.tabs(["📊 Usage Trends", "👥 User Activity", "🔧 Task Types", "❌ Errors"])
-        
-        with tab1:
-            st.subheader("Daily Query Volume (Last 30 Days)")
-            if analytics['daily_activity']:
-                import pandas as pd
-                df_daily = pd.DataFrame(analytics['daily_activity'], columns=['Date', 'Queries'])
-                st.bar_chart(df_daily.set_index('Date'))
-            else:
-                st.info("No data available yet")
-        
-        with tab2:
-            st.subheader("Top Active Users")
-            if analytics['top_users']:
-                df_users = pd.DataFrame(analytics['top_users'], columns=['Email', 'Name', 'Query Count'])
-                st.dataframe(df_users, use_container_width=True)
-            else:
-                st.info("No user data available yet")
-        
-        with tab3:
-            st.subheader("Queries by Task Type")
-            if analytics['queries_by_task']:
-                df_tasks = pd.DataFrame(analytics['queries_by_task'], columns=['Task Type', 'Count'])
-                st.bar_chart(df_tasks.set_index('Task Type'))
-                st.dataframe(df_tasks, use_container_width=True)
-            else:
-                st.info("No task data available yet")
-        
-        with tab4:
-            st.subheader("Recent Errors")
-            if analytics['recent_errors']:
-                df_errors = pd.DataFrame(analytics['recent_errors'], 
-                                       columns=['User Email', 'Task Type', 'Error', 'Timestamp'])
-                st.dataframe(df_errors, use_container_width=True)
-            else:
-                st.success("No recent errors! 🎉")
-
-# Reset query count if necessary
-if datetime.now() >= st.session_state.query_reset_time:
-    st.session_state.query_count = 0
-    st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
-
-if not st.session_state.is_admin:
-    st.sidebar.markdown("### 🔒 Usage Limit")
-    st.sidebar.markdown(f"Queries used: **{st.session_state.query_count}/5**")
-    reset_in = st.session_state.query_reset_time - datetime.now()
-    st.sidebar.caption(f"Resets in: {reset_in.seconds // 3600}h {(reset_in.seconds % 3600) // 60}m")
 
 # === Input ===
 st.markdown("---")
@@ -365,7 +452,7 @@ if st.button("Run"):
         st.session_state.run_analysis = True
         st.rerun()
 
-# === Prompt & GPT Execution ===
+# === Enhanced GPT Execution with Analytics Logging ===
 if st.session_state.run_analysis:
     prompt_templates = {
         "Explain": f"""You are an expert SQL instructor.
