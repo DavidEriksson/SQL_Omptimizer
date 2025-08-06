@@ -23,6 +23,20 @@ CREATE TABLE IF NOT EXISTS users (
 )
 ''')
 
+# Check if we need to add the admin column or rename is_admin to admin
+cursor.execute("PRAGMA table_info(users)")
+columns = cursor.fetchall()
+column_names = [column[1] for column in columns]
+
+if 'is_admin' in column_names and 'admin' not in column_names:
+    # Rename is_admin to admin for consistency
+    cursor.execute('ALTER TABLE users RENAME COLUMN is_admin TO admin')
+    conn.commit()
+elif 'admin' not in column_names and 'is_admin' not in column_names:
+    # Add admin column if neither exists
+    cursor.execute('ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT 0')
+    conn.commit()
+
 # === Analytics Database Setup ===
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS query_logs (
@@ -202,7 +216,11 @@ if not st.session_state.logged_in:
             if user and verify_password(user[2], password):
                 st.session_state.logged_in = True
                 st.session_state.user_email = email
-                st.session_state.is_admin = user[3]
+                # Handle both admin and is_admin column names
+                if len(user) > 3:
+                    st.session_state.is_admin = bool(user[3]) if user[3] is not None else False
+                else:
+                    st.session_state.is_admin = False
                 st.rerun()
             else:
                 st.error("Invalid email or password")
