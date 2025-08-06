@@ -109,13 +109,13 @@ if st.sidebar.button("Logout"):
 # === EMERGENCY ADMIN ACCESS (REMOVE AFTER USE) ===
 if st.session_state.logged_in:
     # Check if there are any admin users
-    cursor.execute('SELECT COUNT(*) FROM users WHERE admin = 1')
+    cursor.execute('SELECT COUNT(*) FROM users WHERE is_admin = 1')
     admin_count = cursor.fetchone()[0]
     
     if admin_count == 0:  # No admins exist
         st.warning("🚨 No admin users found!")
         if st.button("🔧 Make Me Admin (Emergency)"):
-            cursor.execute('UPDATE users SET admin = 1 WHERE email = ?', (st.session_state.user_email,))
+            cursor.execute('UPDATE users SET is_admin = 1 WHERE email = ?', (st.session_state.user_email,))
             conn.commit()
             st.session_state.is_admin = True
             st.success("✅ Emergency admin access granted!")
