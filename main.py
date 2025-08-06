@@ -223,12 +223,18 @@ def log_query(user_email, task_type, query_length, tokens_used=None, success=Tru
 
 def save_query_to_history(user_email, query_text, task_type, result_text=None, query_name=None):
     """Save a query to user's history"""
-    cursor.execute('''
-    INSERT INTO query_history (user_email, query_text, task_type, result_text, query_name)
-    VALUES (?, ?, ?, ?, ?)
-    ''', (user_email, query_text, task_type, result_text, query_name))
-    conn.commit()
-    return cursor.lastrowid
+    try:
+        cursor.execute('''
+        INSERT INTO query_history (user_email, query_text, task_type, result_text, query_name)
+        VALUES (?, ?, ?, ?, ?)
+        ''', (user_email, query_text, task_type, result_text, query_name))
+        conn.commit()
+        query_id = cursor.lastrowid
+        print(f"DEBUG: Saved query {query_id} for user {user_email}")  # Debug line
+        return query_id
+    except Exception as e:
+        print(f"DEBUG: Error saving query: {e}")  # Debug line
+        raise e
 
 def get_user_query_history(user_email, limit=50):
     """Get user's query history"""
@@ -504,6 +510,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
+    # Navigation section - only show once
     st.markdown("### Navigation")
     
     st.markdown("### Navigation")
@@ -999,12 +1006,11 @@ SQL Query to Test:
                             task_type=task,
                             result_text=reply
                         )
-                        st.success("Analysis complete and saved to history!")
+                        # Just one success message
+                        st.success("Analysis complete!")
                     except Exception as history_error:
                         st.error(f"Analysis complete but failed to save to history: {str(history_error)}")
                         history_id = None
-                    
-                    st.success("Analysis complete!")
                     
                     # Results in a nice container
                     st.markdown("### Analysis Results")
