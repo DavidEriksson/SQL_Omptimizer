@@ -341,7 +341,7 @@ def format_sql(sql_query):
     if not sql_query.strip():
         return sql_query
     
-    # SQL keywords to capitalize
+    # SQL keywords to capitalize - be very specific about word boundaries
     keywords = [
         'SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN',
         'FULL JOIN', 'CROSS JOIN', 'ON', 'AND', 'OR', 'NOT', 'IN', 'EXISTS', 'BETWEEN',
@@ -355,93 +355,29 @@ def format_sql(sql_query):
         'UNIQUE', 'CHECK', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'OUTER', 'CROSS'
     ]
     
-    # Normalize whitespace but preserve asterisks and other special characters
-    formatted = ' '.join(sql_query.split())
-    
-    # Capitalize keywords (case-insensitive replacement) - be more careful with word boundaries
     import re
+    
+    # Start with the original query
+    result = sql_query
+    
+    # Only capitalize SQL keywords, nothing else
     for keyword in keywords:
-        # Use word boundaries but be careful not to affect special characters
-        pattern = r'\b' + re.escape(keyword) + r'\b'
-        formatted = re.sub(pattern, keyword, formatted, flags=re.IGNORECASE)
+        # Use very specific word boundaries to avoid affecting table/column names
+        pattern = r'\b' + re.escape(keyword.lower()) + r'\b'
+        result = re.sub(pattern, keyword, result, flags=re.IGNORECASE)
     
-    # Add line breaks and indentation
-    lines = []
-    indent_level = 0
-    current_line = ""
+    # Basic cleanup - only fix spacing issues, don't remove content
+    result = re.sub(r'[ \t]+', ' ', result)  # Multiple spaces/tabs to single space
+    result = re.sub(r' +\n', '\n', result)   # Remove trailing spaces on lines
+    result = re.sub(r'\n +', '\n', result)   # Remove leading spaces after newlines (but preserve intentional indentation)
     
-    # Split by major keywords that should start new lines
-    major_keywords = ['SELECT', 'FROM', 'WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 
-                     'UNION', 'UNION ALL', 'WITH']
-    join_keywords = ['JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'FULL JOIN', 'CROSS JOIN']
+    # Fix spacing around common SQL punctuation
+    result = re.sub(r' ,', ',', result)      # Remove space before comma
+    result = re.sub(r',([a-zA-Z0-9_])', r', \1', result)  # Add space after comma if followed by alphanumeric
+    result = re.sub(r'\( ', '(', result)     # Remove space after opening parenthesis
+    result = re.sub(r' \)', ')', result)     # Remove space before closing parenthesis
     
-    # Split into tokens while preserving special characters
-    tokens = re.findall(r'\w+|\*|[^\w\s]|\s+', formatted)
-    # Filter out whitespace-only tokens and normalize
-    words = [token.strip() for token in tokens if token.strip()]
-    
-    i = 0
-    while i < len(words):
-        word = words[i]
-        
-        # Check for major keywords
-        keyword_found = False
-        for keyword in major_keywords + join_keywords:
-            keyword_parts = keyword.split()
-            if i + len(keyword_parts) <= len(words):
-                if ' '.join(words[i:i+len(keyword_parts)]).upper() == keyword:
-                    # Add current line if it has content
-                    if current_line.strip():
-                        lines.append('    ' * indent_level + current_line.strip())
-                        current_line = ""
-                    
-                    # Start new line with keyword
-                    current_line = keyword
-                    i += len(keyword_parts)
-                    keyword_found = True
-                    break
-        
-        if not keyword_found:
-            if word.upper() == 'AND' and current_line.strip().upper().startswith(('WHERE', 'HAVING', 'ON')):
-                # Add AND on new line with extra indentation for readability
-                lines.append('    ' * indent_level + current_line.strip())
-                current_line = "    AND"
-            elif word == '(':
-                current_line += ' ' + word if current_line else word
-                indent_level += 1
-            elif word == ')':
-                indent_level = max(0, indent_level - 1)
-                current_line += word
-            elif word == ',':
-                current_line += word
-                lines.append('    ' * indent_level + current_line.strip())
-                current_line = ""
-            else:
-                # Add word with proper spacing, preserving special characters like *
-                if current_line and not current_line.endswith((' ', '(')):
-                    current_line += ' '
-                current_line += word
-        
-        i += 1
-    
-    # Add remaining line
-    if current_line.strip():
-        lines.append('    ' * indent_level + current_line.strip())
-    
-    # Join lines and clean up
-    result = '\n'.join(lines)
-    
-    # Clean up formatting but preserve special characters
-    result = re.sub(r' +', ' ', result)      # Multiple spaces to single space
-    result = re.sub(r' ,', ',', result)      # Space before comma
-    result = re.sub(r'\( ', '(', result)     # Space after opening parenthesis  
-    result = re.sub(r' \)', ')', result)     # Space before closing parenthesis
-    result = re.sub(r',([^\s])', r', \1', result)  # Add space after comma if missing
-    
-    # Fix line breaks
-    result = result.replace(' \n', '\n').replace('\n ', '\n')
-    
-    return result
+    return result.strip()
 
 # === Session state init ===
 if "logged_in" not in st.session_state:
