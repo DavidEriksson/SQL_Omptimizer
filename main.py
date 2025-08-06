@@ -668,42 +668,34 @@ elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.markdown("""
-        <div class="analytics-card">
-            <h3>👥 Users</h3>
-            <h2>{}</h2>
-            <p>{} active (7d)</p>
-        </div>
-        """.format(analytics_data['total_users'], analytics_data['active_users_7d']), unsafe_allow_html=True)
+        st.metric(
+            label="👥 Total Users",
+            value=analytics_data['total_users'],
+            delta=f"{analytics_data['active_users_7d']} active (7d)"
+        )
     
     with col2:
-        st.markdown("""
-        <div class="analytics-card">
-            <h3>🔍 Queries</h3>
-            <h2>{}</h2>
-            <p>{:.1f}% success rate</p>
-        </div>
-        """.format(analytics_data['total_queries'], analytics_data['success_rate']), unsafe_allow_html=True)
+        st.metric(
+            label="🔍 Total Queries", 
+            value=analytics_data['total_queries'],
+            delta=f"{analytics_data['success_rate']:.1f}% success rate"
+        )
     
     with col3:
         estimated_cost = (analytics_data['total_tokens'] / 1000) * 0.000150
-        st.markdown("""
-        <div class="analytics-card">
-            <h3>💰 Costs</h3>
-            <h2>${:.3f}</h2>
-            <p>{:,} tokens used</p>
-        </div>
-        """.format(estimated_cost, analytics_data['total_tokens']), unsafe_allow_html=True)
+        st.metric(
+            label="💰 API Costs",
+            value=f"${estimated_cost:.3f}",
+            delta=f"{analytics_data['total_tokens']:,} tokens"
+        )
     
     with col4:
         popular_task = analytics_data['queries_by_task'][0][0] if analytics_data['queries_by_task'] else "None"
-        st.markdown("""
-        <div class="analytics-card">
-            <h3>🔥 Most Popular</h3>
-            <h2>{}</h2>
-            <p>Avg {} chars/query</p>
-        </div>
-        """.format(popular_task, analytics_data['avg_query_length']), unsafe_allow_html=True)
+        st.metric(
+            label="🔥 Most Popular Task",
+            value=popular_task,
+            delta=f"Avg {analytics_data['avg_query_length']} chars/query"
+        )
     
     # Detailed Analytics
     tab1, tab2, tab3, tab4 = st.tabs(["📊 Usage Trends", "👥 User Activity", "🔧 Task Types", "❌ Errors"])
