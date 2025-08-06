@@ -1,7 +1,17 @@
 credentials:
-  usernames: {}
+  usernames:
+    dummy:
+      email: dummy@example.com
+      name: Dummy User
+      password: dummyhashed
+    admin:
+      email: admin@example.com
+      name: Admin
+      password: dummyhashed
+
 cookie:
   expiry_days: 30
   name: sql_optimizer_login
+
 preauthorized:
   emails: []
