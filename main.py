@@ -512,43 +512,95 @@ elif st.session_state.current_page == "Optimizer":
         function enableTabs() {
             const textarea = parent.document.querySelector('textarea[aria-label="SQL Query"]');
             if (textarea) {
+                // Remove any existing listeners
+                textarea.onkeydown = null;
+                
                 textarea.addEventListener('keydown', function(e) {
                     if (e.key === 'Tab') {
                         e.preventDefault();
+                        
                         const start = this.selectionStart;
                         const end = this.selectionEnd;
                         const value = this.value;
                         
                         if (e.shiftKey) {
-                            // Shift+Tab: Remove indentation
-                            const lineStart = value.lastIndexOf('\\n', start - 1) + 1;
-                            const lineText = value.substring(lineStart, start);
+                            // Shift+Tab: Remove indentation from selected lines
+                            const beforeSelection = value.substring(0, start);
+                            const selectedText = value.substring(start, end);
+                            const afterSelection = value.substring(end);
                             
-                            if (lineText.startsWith('    ')) {
-                                this.value = value.substring(0, lineStart) + lineText.substring(4) + value.substring(start);
-                                this.selectionStart = this.selectionEnd = start - 4;
-                            } else if (lineText.startsWith('\\t')) {
-                                this.value = value.substring(0, lineStart) + lineText.substring(1) + value.substring(start);
-                                this.selectionStart = this.selectionEnd = start - 1;
-                            }
+                            // Find the start of the first line in selection
+                            const firstLineStart = beforeSelection.lastIndexOf('\\n') + 1;
+                            const textBeforeFirstLine = value.substring(0, firstLineStart);
+                            const selectedWithFirstLine = value.substring(firstLineStart, end);
+                            
+                            // Remove 4 spaces or 1 tab from each line
+                            const unindentedText = selectedWithFirstLine.replace(/^(    |\\t)/gm, '');
+                            
+                            // Calculate new cursor position
+                            const removedChars = selectedWithFirstLine.length - unindentedText.length;
+                            
+                            this.value = textBeforeFirstLine + unindentedText + afterSelection;
+                            this.selectionStart = Math.max(firstLineStart, start - Math.min(4, removedChars));
+                            this.selectionEnd = Math.max(this.selectionStart, end - removedChars);
+                            
                         } else {
                             // Tab: Add indentation
-                            this.value = value.substring(0, start) + '    ' + value.substring(end);
-                            this.selectionStart = this.selectionEnd = start + 4;
+                            if (start === end) {
+                                // No selection - just insert 4 spaces
+                                this.value = value.substring(0, start) + '    ' + value.substring(end);
+                                this.selectionStart = this.selectionEnd = start + 4;
+                            } else {
+                                // Selection exists - indent all selected lines
+                                const beforeSelection = value.substring(0, start);
+                                const selectedText = value.substring(start, end);
+                                const afterSelection = value.substring(end);
+                                
+                                // Find the start of the first line in selection
+                                const firstLineStart = beforeSelection.lastIndexOf('\\n') + 1;
+                                const textBeforeFirstLine = value.substring(0, firstLineStart);
+                                const selectedWithFirstLine = value.substring(firstLineStart, end);
+                                
+                                // Add 4 spaces to each line
+                                const indentedText = selectedWithFirstLine.replace(/^/gm, '    ');
+                                
+                                // Calculate new selection
+                                const addedChars = indentedText.length - selectedWithFirstLine.length;
+                                
+                                this.value = textBeforeFirstLine + indentedText + afterSelection;
+                                this.selectionStart = start + 4;
+                                this.selectionEnd = end + addedChars;
+                            }
                         }
                         
-                        // Trigger change event
+                        // Trigger input event to update Streamlit
                         this.dispatchEvent(new Event('input', { bubbles: true }));
                     }
                 });
+                
                 console.log('Tab handling enabled for SQL textarea');
+                return true;
+            }
+            return false;
+        }
+        
+        // Try to enable tabs with better timing
+        let attempts = 0;
+        const maxAttempts = 20;
+        
+        function tryEnable() {
+            if (enableTabs()) {
+                console.log('Tab handling successfully enabled');
+                return;
+            }
+            
+            attempts++;
+            if (attempts < maxAttempts) {
+                setTimeout(tryEnable, 200);
             }
         }
         
-        // Try to enable tabs after different delays
-        setTimeout(enableTabs, 100);
-        setTimeout(enableTabs, 500);
-        setTimeout(enableTabs, 1000);
+        tryEnable();
         </script>
         """, height=0)
     
