@@ -1,5 +1,7 @@
 streamlit
 openai
 tiktoken
-streamlit-extras>=0.3.4
-requests
+streamlit-authenticator
+bcrypt
+pyyaml
+ruamel.yaml

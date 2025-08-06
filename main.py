@@ -1,95 +1,139 @@
 import streamlit as st
-from streamlit_extras.oauth2 import with_google_oauth2
 import openai
 import tiktoken
 from datetime import datetime, timedelta
+import yaml
+import streamlit_authenticator as stauth
+from pathlib import Path
 
 # === Secrets ===
-GOOGLE_CLIENT_ID = st.secrets["GOOGLE_CLIENT_ID"]
-GOOGLE_CLIENT_SECRET = st.secrets["GOOGLE_CLIENT_SECRET"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]  # List of admin emails
 COOKIE_KEY = st.secrets["COOKIE_KEY"]
-ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]
-REDIRECT_URI = "https://sqlomptimizer.streamlit.app"
 
-# === Google Login ===
-@with_google_oauth2(
-    client_id=GOOGLE_CLIENT_ID,
-    client_secret=GOOGLE_CLIENT_SECRET,
-    redirect_uri=REDIRECT_URI,
-    cookie_key=COOKIE_KEY,
-    email_domains=None  # sätt t.ex. till ["gmail.com"] om du vill begränsa
+# === Load or create users.yaml ===
+users_file = Path("users.yaml")
+if not users_file.exists():
+    with users_file.open("w") as f:
+        yaml.dump({"credentials": {"usernames": {}}}, f)
+
+with users_file.open("r") as f:
+    config = yaml.safe_load(f)
+
+if config is None:
+    config = {"credentials": {"usernames": {}}}
+
+authenticator = stauth.Authenticate(
+    config,
+    cookie_name="sql_optimizer_login",
+    key=COOKIE_KEY,
+    cookie_expiry_days=30
 )
-def login(email, name):
-    return email, name
 
-email, name = login()
+# === UI: Login/Register ===
+st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
 
-if not email:
+# Show Login/Register buttons
+if "authentication_status" not in st.session_state:
+    login_placeholder = st.empty()
+    with login_placeholder.container():
+        col1, col2 = st.columns([1, 1])
+        if col1.button("🔐 Logga in"):
+            st.session_state.show_login = True
+        if col2.button("🆕 Registrera dig"):
+            st.session_state.show_register = True
+
+if st.session_state.get("show_login"):
+    name, authentication_status, username = authenticator.login("Logga in", "main")
+    if authentication_status:
+        st.success(f"👋 Välkommen {name}!")
+    elif authentication_status is False:
+        st.error("❌ Fel användarnamn eller lösenord")
+    elif authentication_status is None:
+        st.warning("⚠️ Ange inloggningsuppgifter")
+
+if st.session_state.get("show_register"):
+    with st.form("register_form", clear_on_submit=True):
+        st.subheader("Registrera ny användare")
+        email = st.text_input("E-post")
+        name = st.text_input("Fullständigt namn")
+        password = st.text_input("Lösenord", type="password")
+        submitted = st.form_submit_button("Skapa konto")
+        if submitted:
+            if email in config["credentials"]["usernames"]:
+                st.error("Användaren finns redan.")
+            else:
+                hashed_pw = stauth.Hasher([password]).generate()[0]
+                config["credentials"]["usernames"][email] = {
+                    "name": name,
+                    "password": hashed_pw
+                }
+                with users_file.open("w") as f:
+                    yaml.dump(config, f)
+                st.success("✅ Konto skapat! Klicka på 'Logga in' för att logga in.")
+                st.session_state.show_register = False
+
+# === Stop if not authenticated ===
+if "authentication_status" not in st.session_state or not st.session_state.authentication_status:
     st.stop()
 
-# === Admin Logic ===
-is_admin = email in ADMIN_EMAILS
+# === Admin check ===
+email = st.session_state.username
+is_admin = email in ADMINS
 
-# === UI Setup ===
-st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
-st.title("SQL Optimizer")
-st.success(f"👋 Welcome {name} ({email})")
-if is_admin:
-    st.sidebar.success("👑 Admin Account (Unlimited)")
-else:
-    st.sidebar.info("👤 Standard Account")
-
-# === Query Limit Setup ===
+# === Session setup ===
 if "query_count" not in st.session_state:
     st.session_state.query_count = 0
     st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
+if "run_analysis" not in st.session_state:
+    st.session_state.run_analysis = False
 
+# === Reset timer ===
 if datetime.now() >= st.session_state.query_reset_time:
     st.session_state.query_count = 0
     st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
 
-if not is_admin:
-    st.sidebar.markdown("### 🔒 Usage Limit")
-    st.sidebar.markdown(f"Queries used: **{st.session_state.query_count}/5**")
-    reset_in = st.session_state.query_reset_time - datetime.now()
-    hours = reset_in.seconds // 3600
-    minutes = (reset_in.seconds % 3600) // 60
-    st.sidebar.caption(f"Resets in: {hours}h {minutes}m")
+# === Sidebar info ===
+st.sidebar.markdown(f"👤 Inloggad som: **{email}**")
+if is_admin:
+    st.sidebar.success("👑 Adminkonto – obegränsad användning")
+else:
+    st.sidebar.markdown(f"🧠 Använda queries: **{st.session_state.query_count}/5**")
+    remaining = st.session_state.query_reset_time - datetime.now()
+    st.sidebar.caption(f"🔄 Återställs om: {remaining.seconds//3600}h {(remaining.seconds%3600)//60}m")
 
-# === User Input ===
+if not is_admin and st.session_state.query_count >= 5:
+    st.error("❌ Du har nått max antal queries. Vänta tills återställning.")
+    st.stop()
+
+# === Input ===
+st.title("SQL Optimizer")
 st.markdown("---")
-st.subheader("Paste your SQL query")
+st.subheader("Klistra in din SQL-kod")
 sql_query = st.text_area("SQL Code", height=200, placeholder="Paste SQL here...")
-task = st.selectbox("What do you want to do?", ["Explain", "Detect Issues", "Optimize", "Test"])
+task = st.selectbox("Vad vill du göra?", ["Explain", "Detect Issues", "Optimize", "Test"])
+
 model = "gpt-4o-mini"
 temperature = 0.3
 max_tokens = 1500
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-# === Token Counter ===
 def estimate_tokens(text):
     enc = tiktoken.encoding_for_model(model)
     return len(enc.encode(text))
 
-if "run_analysis" not in st.session_state:
-    st.session_state.run_analysis = False
-
-# === Run Button ===
-if st.button("Run"):
+# === Run analysis ===
+if st.button("Analysera"):
     if not sql_query.strip():
-        st.error("❌ Please enter a SQL query.")
-    elif not is_admin and st.session_state.query_count >= 5:
-        st.error("❌ Query limit reached. Please wait for reset.")
+        st.error("❌ Klistra in en SQL-fråga.")
     else:
         if not is_admin:
             st.session_state.query_count += 1
         st.session_state.run_analysis = True
         st.rerun()
 
-# === Prompt Builder + GPT Logic ===
 if st.session_state.run_analysis:
-    prompt_templates = {
+    templates = {
         "Explain": f"""
 You are an expert SQL instructor.
 
@@ -99,21 +143,17 @@ Explain this SQL query step-by-step, including:
 - The role of each table and join
 - Any assumptions about the data
 
-Don't talk like an AI bot.
-
 SQL Query:
 {sql_query}
 """,
         "Detect Issues": f"""
-You are a senior SQL code reviewer.
+You are a senior SQL reviewer.
 
-Analyze the following SQL query and list:
+Analyze this SQL and list:
 - Performance problems
-- Poor practices
+- Bad practices
 - Logical issues
-- Suggestions for improvement
-
-Don't talk like an AI bot.
+- Suggestions
 
 SQL Query:
 {sql_query}
@@ -121,36 +161,29 @@ SQL Query:
         "Optimize": f"""
 You are a SQL performance expert.
 
-Review the query below and:
-1. Suggest how to optimize it
-2. Provide a revised version
-3. Explain why your changes help
-
-Don't talk like an AI bot.
+1. Suggest optimizations
+2. Rewrite the query
+3. Explain your changes
 
 SQL Query:
 {sql_query}
 """,
         "Test": f"""
-You are a SQL testing expert.
-
 Generate:
-- 3 to 5 rows of sample data for each table used
-- Expected result set based on the query
-- Brief notes on how the data satisfies the query logic
-
-Don't talk like an AI bot.
+- Sample data for each table
+- Expected result set
+- Notes explaining logic
 
 SQL Query:
 {sql_query}
 """
     }
 
-    prompt = prompt_templates[task]
+    prompt = templates[task]
 
-    with st.spinner("🔍 Analyzing your SQL..."):
+    with st.spinner("🔍 Bearbetar din SQL..."):
         try:
-            token_estimate = estimate_tokens(prompt)
+            tokens = estimate_tokens(prompt)
             response = client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
@@ -158,12 +191,12 @@ SQL Query:
                 max_tokens=max_tokens
             )
             reply = response.choices[0].message.content
-            st.success("✅ Analysis complete!")
-            st.markdown("### Result")
+            st.success("✅ Klar!")
+            st.markdown("### Resultat")
             st.markdown(reply)
-            st.caption(f"🔢 Estimated tokens: {token_estimate} • Model: {model}")
-            st.download_button("📋 Copy Result", reply, file_name="sql_analysis.txt")
+            st.caption(f"🔢 Tokens: {tokens} • Modell: {model}")
+            st.download_button("📋 Kopiera resultat", reply, file_name="sql_analysis.txt")
         except Exception as e:
-            st.error(f"Error: {str(e)}")
+            st.error(f"Fel: {str(e)}")
 
     st.session_state.run_analysis = False
