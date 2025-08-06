@@ -1,12 +1,6 @@
 credentials:
-  usernames:
-    test@example.com:
-      email: "test@example.com"
-      name: "Test Admin"
-      password: "$2b$12$kW8iElbYVXNLxjv6mQWnZORqB9V2FClzJvnUDT0bbPHb8Qbs47yqO"  # test1234
+  usernames: {}
 cookie:
   expiry_days: 30
-  name: sql_optimizer_login
 preauthorized:
-  emails:
-    - test@example.com
+  emails: []

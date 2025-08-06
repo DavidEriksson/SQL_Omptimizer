@@ -6,39 +6,25 @@ from datetime import datetime, timedelta
 import openai
 import tiktoken
 
-# === Secrets ===
+# === Hämta hemligheter från Streamlit secrets ===
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 COOKIE_KEY = st.secrets["COOKIE_KEY"]
-ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]  # List of emails
+ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]
 
-# === Create users.yaml if missing ===
-if not os.path.exists("users.yaml"):
-    default_user = {
-        "credentials": {
-            "usernames": {
-                "test@example.com": {
-                    "email": "test@example.com",
-                    "name": "Test Admin",
-                    "password": "$2b$12$kW8iElbYVXNLxjv6mQWnZORqB9V2FClzJvnUDT0bbPHb8Qbs47yqO"  # test1234
-                }
-            }
-        },
-        "cookie": {
-            "expiry_days": 30,
-            "name": "sql_optimizer_login"
-        },
-        "preauthorized": {
-            "emails": ["test@example.com"]
-        }
-    }
-    with open("users.yaml", "w") as f:
-        yaml.dump(default_user, f)
+# === Kontrollera och ladda users.yaml ===
+users_file = "users.yaml"
+if not os.path.exists(users_file):
+    with open(users_file, "w") as f:
+        yaml.dump({
+            "credentials": {"usernames": {}},
+            "cookie": {"expiry_days": 30},
+            "preauthorized": {"emails": []}
+        }, f)
 
-# === Load config ===
-with open("users.yaml", "r") as file:
+with open(users_file) as file:
     config = yaml.safe_load(file)
 
-# === Authenticator ===
+# === Init autentisering ===
 authenticator = stauth.Authenticate(
     config,
     cookie_name="sql_optimizer_login",
@@ -46,48 +32,43 @@ authenticator = stauth.Authenticate(
     cookie_expiry_days=30
 )
 
-# === Sidebar Login/Register ===
-st.sidebar.title("Account")
-auth_option = st.sidebar.radio("Choose:", ("Login", "Register"))
+# === Välj inloggningsläge ===
+auth_mode = st.sidebar.radio("Konto", ("Logga in", "Registrera"))
 
-if auth_option == "Register":
+if auth_mode == "Registrera":
     try:
         email, username, password = authenticator.register_user(preauthorization=False)
         if email:
-            st.success("✅ User registered. Please log in.")
-            # Add to config and save to file
-            config["credentials"]["usernames"][email] = {
-                "email": email,
-                "name": username,
-                "password": password
-            }
-            with open("users.yaml", "w") as f:
+            with open(users_file, "w") as f:
                 yaml.dump(config, f)
-            st.stop()
+            st.success("✅ Användare registrerad. Logga in nedan.")
     except Exception as e:
-        st.error(f"Registration error: {str(e)}")
-        st.stop()
+        st.error(f"Registreringsfel: {e}")
 
-name, auth_status, username = authenticator.login("Login", "main")
+# === Logga in ===
+name, authentication_status, username = authenticator.login("Logga in", "main")
 
-if not auth_status:
+if not authentication_status:
     st.stop()
 
+# === Inloggad ===
 email = username
 is_admin = email in ADMIN_EMAILS
 
-authenticator.logout("Logout", "sidebar")
+authenticator.logout("Logga ut", "sidebar")
 
 # === UI Setup ===
 st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
 st.title("SQL Optimizer")
-st.success(f"👋 Welcome {name} ({email})")
-if is_admin:
-    st.sidebar.success("👑 Admin Account (Unlimited)")
-else:
-    st.sidebar.info("👤 Standard Account")
+st.success(f"👋 Välkommen {name} ({email})")
+st.sidebar.markdown("")
 
-# === Session state ===
+if is_admin:
+    st.sidebar.success("👑 Admin-konto (Obegränsat)")
+else:
+    st.sidebar.info("👤 Standardanvändare")
+
+# === Session state hantering ===
 if "query_count" not in st.session_state:
     st.session_state.query_count = 0
     st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
@@ -97,16 +78,16 @@ if datetime.now() >= st.session_state.query_reset_time:
     st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
 
 if not is_admin:
-    st.sidebar.markdown("### 🔒 Usage Limit")
+    st.sidebar.markdown("### 🔒 Användningsgräns")
     st.sidebar.markdown(f"Queries used: **{st.session_state.query_count}/5**")
     reset_in = st.session_state.query_reset_time - datetime.now()
-    st.sidebar.caption(f"Resets in: {reset_in.seconds // 3600}h {(reset_in.seconds % 3600) // 60}m")
+    st.sidebar.caption(f"Återställs om: {reset_in.seconds // 3600}h {(reset_in.seconds % 3600) // 60}m")
 
-# === User Input ===
+# === Användarinput ===
 st.markdown("---")
-st.subheader("Paste your SQL query")
-sql_query = st.text_area("SQL Code", height=200, placeholder="Paste SQL here...")
-task = st.selectbox("What do you want to do?", ["Explain", "Detect Issues", "Optimize", "Test"])
+st.subheader("Klistra in din SQL-fråga")
+sql_query = st.text_area("SQL-kod", height=200, placeholder="Klistra in din SQL här...")
+task = st.selectbox("Vad vill du göra?", ["Explain", "Detect Issues", "Optimize", "Test"])
 model = "gpt-4o-mini"
 temperature = 0.3
 max_tokens = 1500
@@ -119,19 +100,21 @@ def estimate_tokens(text):
 if "run_analysis" not in st.session_state:
     st.session_state.run_analysis = False
 
-if st.button("Run"):
+# === Kör-knapp ===
+if st.button("Kör"):
     if not sql_query.strip():
-        st.error("❌ Please enter a SQL query.")
+        st.error("❌ Ange en SQL-fråga.")
     elif not is_admin and st.session_state.query_count >= 5:
-        st.error("❌ Query limit reached. Please wait for reset.")
+        st.error("❌ Du har nått gränsen. Vänta på återställning.")
     else:
         if not is_admin:
             st.session_state.query_count += 1
         st.session_state.run_analysis = True
         st.rerun()
 
+# === GPT-anrop ===
 if st.session_state.run_analysis:
-    prompt_templates = {
+    prompts = {
         "Explain": f"""
 You are an expert SQL instructor.
 
@@ -188,11 +171,10 @@ SQL Query:
 """
     }
 
-    prompt = prompt_templates[task]
-
-    with st.spinner("🔍 Analyzing your SQL..."):
+    with st.spinner("🔍 Analyserar SQL..."):
         try:
-            token_estimate = estimate_tokens(prompt)
+            prompt = prompts[task]
+            tokens = estimate_tokens(prompt)
             response = client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
@@ -200,12 +182,12 @@ SQL Query:
                 max_tokens=max_tokens
             )
             reply = response.choices[0].message.content
-            st.success("✅ Analysis complete!")
-            st.markdown("### Result")
+            st.success("✅ Klar!")
+            st.markdown("### Resultat")
             st.markdown(reply)
-            st.caption(f"🔢 Estimated tokens: {token_estimate} • Model: {model}")
-            st.download_button("📋 Copy Result", reply, file_name="sql_analysis.txt")
+            st.caption(f"🔢 Tokens: {tokens} • Modell: {model}")
+            st.download_button("📋 Kopiera resultat", reply, file_name="sql_analysis.txt")
         except Exception as e:
-            st.error(f"Error: {str(e)}")
+            st.error(f"Fel: {e}")
 
     st.session_state.run_analysis = False
