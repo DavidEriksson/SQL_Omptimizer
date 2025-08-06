@@ -103,34 +103,6 @@ if st.sidebar.button("Logout"):
     st.session_state.is_admin = False
     st.rerun()
 
-# Add this TEMPORARILY right after your login section
-# Remove this code after you've made yourself admin!
-
-# === EMERGENCY ADMIN ACCESS (REMOVE AFTER USE) ===
-if st.session_state.logged_in:
-    # Check if there are any admin users
-    cursor.execute('SELECT COUNT(*) FROM users WHERE is_admin = 1')
-    admin_count = cursor.fetchone()[0]
-    
-    if admin_count == 0:  # No admins exist
-        st.warning("🚨 No admin users found!")
-        if st.button("🔧 Make Me Admin (Emergency)"):
-            cursor.execute('UPDATE users SET is_admin = 1 WHERE email = ?', (st.session_state.user_email,))
-            conn.commit()
-            st.session_state.is_admin = True
-            st.success("✅ Emergency admin access granted!")
-            st.rerun()
-    
-    # OR: Force admin for specific email (replace with your email)
-    YOUR_EMAIL = "your-email@example.com"  # CHANGE THIS!
-    if st.session_state.user_email == YOUR_EMAIL and not st.session_state.is_admin:
-        if st.button(f"🔧 Grant Admin to {YOUR_EMAIL}"):
-            cursor.execute('UPDATE users SET admin = 1 WHERE email = ?', (YOUR_EMAIL,))
-            conn.commit()
-            st.session_state.is_admin = True
-            st.success("✅ Admin access granted!")
-            st.rerun()
-# === END EMERGENCY ACCESS ===
 
 # === Admin User Management ===
 if st.session_state.is_admin:
