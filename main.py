@@ -9,7 +9,7 @@ import pandas as pd
 
 # === Load from Streamlit Secrets ===
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]  # list of admin emails
+ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]
 
 # === Page Configuration ===
 st.set_page_config(
@@ -58,21 +58,6 @@ st.markdown("""
         margin: 1rem 0;
     }
     
-    .sidebar .element-container {
-        margin-bottom: 1rem;
-    }
-    
-    .analytics-card {
-        background: #2d3748;
-        color: white;
-        padding: 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-        border-top: 4px solid #667eea;
-        margin-bottom: 1rem;
-    }
-    
-    /* Navigation button styling */
     .stButton > button {
         width: 100%;
         margin: 0.2rem 0;
@@ -82,7 +67,6 @@ st.markdown("""
         transition: all 0.2s ease;
     }
     
-    /* Style buttons based on their text content */
     div[data-testid="stSidebar"] button[kind="primary"] {
         background-color: #667eea !important;
         color: white !important;
@@ -95,7 +79,6 @@ st.markdown("""
         border: none !important;
     }
     
-    /* Fix text area styling */
     .stTextArea textarea {
         font-family: 'Courier New', monospace !important;
         tab-size: 4 !important;
@@ -109,7 +92,6 @@ st.markdown("""
         box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
     }
     
-    /* Fix tab styling - More specific selectors */
     div[data-testid="stTabs"] > div[data-baseweb="tab-list"] {
         gap: 8px !important;
         background-color: transparent !important;
@@ -130,24 +112,13 @@ st.markdown("""
         background-color: #667eea !important;
         color: white !important;
     }
-    
-    div[data-testid="stTabs"] > div[data-baseweb="tab-list"] button[data-baseweb="tab"]:hover {
-        background-color: #e0e2e6 !important;
-        color: #262730 !important;
-    }
-    
-    div[data-testid="stTabs"] > div[data-baseweb="tab-list"] button[data-baseweb="tab"][aria-selected="true"]:hover {
-        background-color: #5a6fd8 !important;
-        color: white !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# === SQLite Database Setup ===
+# === Database Setup ===
 conn = sqlite3.connect('SQLOpt_prod.db', check_same_thread=False)
 cursor = conn.cursor()
 
-# Create users table if it doesn't exist
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS users (
     email TEXT PRIMARY KEY,
@@ -157,7 +128,6 @@ CREATE TABLE IF NOT EXISTS users (
 )
 ''')
 
-# Check if we need to add the admin column or rename is_admin to admin
 cursor.execute("PRAGMA table_info(users)")
 columns = cursor.fetchall()
 column_names = [column[1] for column in columns]
@@ -169,7 +139,6 @@ elif 'admin' not in column_names and 'is_admin' not in column_names:
     cursor.execute('ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT 0')
     conn.commit()
 
-# === Analytics Database Setup ===
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS query_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -184,7 +153,6 @@ CREATE TABLE IF NOT EXISTS query_logs (
 )
 ''')
 
-# === Query History Database Setup ===
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS query_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -200,11 +168,11 @@ CREATE TABLE IF NOT EXISTS query_history (
 ''')
 conn.commit()
 
+# === Functions ===
 def add_user(email, name, password, is_admin=False):
     hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-    cursor.execute('''
-    INSERT INTO users (email, name, password, admin) VALUES (?, ?, ?, ?)
-    ''', (email, name, hashed_password, is_admin))
+    cursor.execute('INSERT INTO users (email, name, password, admin) VALUES (?, ?, ?, ?)', 
+                   (email, name, hashed_password, is_admin))
     conn.commit()
 
 def get_user(email):
@@ -215,56 +183,29 @@ def verify_password(stored_password, provided_password):
     return bcrypt.checkpw(provided_password.encode(), stored_password.encode())
 
 def log_query(user_email, task_type, query_length, tokens_used=None, success=True, error_message=None):
-    cursor.execute('''
-    INSERT INTO query_logs (user_email, task_type, query_length, tokens_used, success, error_message)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ''', (user_email, task_type, query_length, tokens_used, success, error_message))
+    cursor.execute('INSERT INTO query_logs (user_email, task_type, query_length, tokens_used, success, error_message) VALUES (?, ?, ?, ?, ?, ?)',
+                   (user_email, task_type, query_length, tokens_used, success, error_message))
     conn.commit()
 
 def save_query_to_history(user_email, query_text, task_type, result_text=None, query_name=None):
-    """Save a query to user's history"""
-    try:
-        cursor.execute('''
-        INSERT INTO query_history (user_email, query_text, task_type, result_text, query_name)
-        VALUES (?, ?, ?, ?, ?)
-        ''', (user_email, query_text, task_type, result_text, query_name))
-        conn.commit()
-        query_id = cursor.lastrowid
-        print(f"DEBUG: Saved query {query_id} for user {user_email}")  # Debug line
-        return query_id
-    except Exception as e:
-        print(f"DEBUG: Error saving query: {e}")  # Debug line
-        raise e
+    cursor.execute('INSERT INTO query_history (user_email, query_text, task_type, result_text, query_name) VALUES (?, ?, ?, ?, ?)',
+                   (user_email, query_text, task_type, result_text, query_name))
+    conn.commit()
+    return cursor.lastrowid
 
 def get_user_query_history(user_email, limit=50):
-    """Get user's query history"""
-    try:
-        cursor.execute('''
-        SELECT id, query_text, task_type, result_text, is_favorite, query_name, timestamp
-        FROM query_history 
-        WHERE user_email = ? 
-        ORDER BY timestamp DESC 
-        LIMIT ?
-        ''', (user_email, limit))
-        results = cursor.fetchall()
-        print(f"DEBUG: get_user_query_history found {len(results)} results for {user_email}")
-        return results
-    except Exception as e:
-        print(f"DEBUG: Error in get_user_query_history: {e}")
-        return []
+    cursor.execute('''SELECT id, query_text, task_type, result_text, is_favorite, query_name, timestamp
+                      FROM query_history WHERE user_email = ? ORDER BY timestamp DESC LIMIT ?''',
+                   (user_email, limit))
+    return cursor.fetchall()
 
 def get_user_favorites(user_email):
-    """Get user's favorite queries"""
-    cursor.execute('''
-    SELECT id, query_text, task_type, result_text, query_name, timestamp
-    FROM query_history 
-    WHERE user_email = ? AND is_favorite = 1 
-    ORDER BY timestamp DESC
-    ''', (user_email,))
+    cursor.execute('''SELECT id, query_text, task_type, result_text, query_name, timestamp
+                      FROM query_history WHERE user_email = ? AND is_favorite = 1 ORDER BY timestamp DESC''',
+                   (user_email,))
     return cursor.fetchall()
 
 def toggle_favorite(query_id):
-    """Toggle favorite status of a query"""
     cursor.execute('SELECT is_favorite FROM query_history WHERE id = ?', (query_id,))
     current_status = cursor.fetchone()[0]
     new_status = 0 if current_status else 1
@@ -273,99 +214,20 @@ def toggle_favorite(query_id):
     return new_status
 
 def delete_query_from_history(query_id, user_email):
-    """Delete a query from history (with user verification)"""
     cursor.execute('DELETE FROM query_history WHERE id = ? AND user_email = ?', (query_id, user_email))
     conn.commit()
     return cursor.rowcount > 0
 
 def update_query_name(query_id, user_email, new_name):
-    """Update the name of a saved query"""
     cursor.execute('UPDATE query_history SET query_name = ? WHERE id = ? AND user_email = ?', 
                    (new_name, query_id, user_email))
     conn.commit()
     return cursor.rowcount > 0
 
-def get_analytics_data():
-    analytics = {}
-    
-    cursor.execute('SELECT COUNT(*) FROM query_logs')
-    analytics['total_queries'] = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(*) FROM query_logs WHERE success = 1')
-    successful_queries = cursor.fetchone()[0]
-    analytics['success_rate'] = (successful_queries / analytics['total_queries'] * 100) if analytics['total_queries'] > 0 else 0
-    
-    cursor.execute('SELECT task_type, COUNT(*) FROM query_logs GROUP BY task_type ORDER BY COUNT(*) DESC')
-    analytics['queries_by_task'] = cursor.fetchall()
-    
-    cursor.execute('''
-    SELECT ql.user_email, u.name, COUNT(*) as query_count 
-    FROM query_logs ql 
-    LEFT JOIN users u ON ql.user_email = u.email 
-    GROUP BY ql.user_email 
-    ORDER BY query_count DESC 
-    LIMIT 10
-    ''')
-    analytics['top_users'] = cursor.fetchall()
-    
-    cursor.execute('''
-    SELECT DATE(timestamp) as date, COUNT(*) as queries 
-    FROM query_logs 
-    WHERE timestamp >= datetime('now', '-30 days')
-    GROUP BY DATE(timestamp) 
-    ORDER BY date DESC
-    ''')
-    analytics['daily_activity'] = cursor.fetchall()
-    
-    cursor.execute('SELECT AVG(query_length) FROM query_logs')
-    avg_length = cursor.fetchone()[0]
-    analytics['avg_query_length'] = round(avg_length, 0) if avg_length else 0
-    
-    cursor.execute('SELECT SUM(tokens_used) FROM query_logs WHERE tokens_used IS NOT NULL')
-    total_tokens = cursor.fetchone()[0]
-    analytics['total_tokens'] = total_tokens if total_tokens else 0
-    
-    cursor.execute('''
-    SELECT user_email, task_type, error_message, timestamp 
-    FROM query_logs 
-    WHERE success = 0 
-    ORDER BY timestamp DESC 
-    LIMIT 10
-    ''')
-    analytics['recent_errors'] = cursor.fetchall()
-    
-    cursor.execute('SELECT COUNT(*) FROM users')
-    analytics['total_users'] = cursor.fetchone()[0]
-    
-    cursor.execute('''
-    SELECT COUNT(DISTINCT user_email) 
-    FROM query_logs 
-    WHERE timestamp >= datetime('now', '-7 days')
-    ''')
-    analytics['active_users_7d'] = cursor.fetchone()[0]
-    
-    return analytics
-
-def get_analytics_data_cached(force_refresh=False):
-    now = datetime.now()
-    
-    if (force_refresh or 
-        st.session_state.last_analytics_update is None or 
-        now - st.session_state.last_analytics_update > timedelta(seconds=30)):
-        
-        analytics = get_analytics_data()
-        st.session_state.cached_analytics = analytics
-        st.session_state.last_analytics_update = now
-        return analytics, True
-    else:
-        return st.session_state.cached_analytics, False
-
 def format_sql(sql_query):
-    """Format SQL query with proper indentation and capitalization"""
     if not sql_query.strip():
         return sql_query
     
-    # SQL keywords to capitalize - be very specific about word boundaries
     keywords = [
         'SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN',
         'FULL JOIN', 'CROSS JOIN', 'ON', 'AND', 'OR', 'NOT', 'IN', 'EXISTS', 'BETWEEN',
@@ -373,37 +235,59 @@ def format_sql(sql_query):
         'OFFSET', 'UNION', 'UNION ALL', 'INTERSECT', 'EXCEPT', 'WITH', 'AS', 'CASE',
         'WHEN', 'THEN', 'ELSE', 'END', 'IF', 'DISTINCT', 'ALL', 'COUNT', 'SUM', 'AVG',
         'MIN', 'MAX', 'SUBSTRING', 'CONCAT', 'COALESCE', 'CAST', 'CONVERT', 'INSERT',
-        'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'TABLE', 'INDEX', 'VIEW',
-        'PROCEDURE', 'FUNCTION', 'TRIGGER', 'DATABASE', 'SCHEMA', 'PRIMARY KEY',
-        'FOREIGN KEY', 'REFERENCES', 'CONSTRAINT', 'DEFAULT', 'AUTO_INCREMENT',
-        'UNIQUE', 'CHECK', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'OUTER', 'CROSS'
+        'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'TABLE', 'INDEX', 'VIEW'
     ]
     
     import re
-    
-    # Start with the original query
     result = sql_query
     
-    # Only capitalize SQL keywords, nothing else
     for keyword in keywords:
-        # Use very specific word boundaries to avoid affecting table/column names
         pattern = r'\b' + re.escape(keyword.lower()) + r'\b'
         result = re.sub(pattern, keyword, result, flags=re.IGNORECASE)
     
-    # Basic cleanup - only fix spacing issues, don't remove content
-    result = re.sub(r'[ \t]+', ' ', result)  # Multiple spaces/tabs to single space
-    result = re.sub(r' +\n', '\n', result)   # Remove trailing spaces on lines
-    result = re.sub(r'\n +', '\n', result)   # Remove leading spaces after newlines (but preserve intentional indentation)
-    
-    # Fix spacing around common SQL punctuation
-    result = re.sub(r' ,', ',', result)      # Remove space before comma
-    result = re.sub(r',([a-zA-Z0-9_])', r', \1', result)  # Add space after comma if followed by alphanumeric
-    result = re.sub(r'\( ', '(', result)     # Remove space after opening parenthesis
-    result = re.sub(r' \)', ')', result)     # Remove space before closing parenthesis
+    result = re.sub(r'[ \t]+', ' ', result)
+    result = re.sub(r' +\n', '\n', result)
+    result = re.sub(r'\n +', '\n', result)
+    result = re.sub(r' ,', ',', result)
+    result = re.sub(r',([a-zA-Z0-9_])', r', \1', result)
+    result = re.sub(r'\( ', '(', result)
+    result = re.sub(r' \)', ')', result)
     
     return result.strip()
 
-# === Session state init ===
+def get_analytics_data():
+    analytics = {}
+    cursor.execute('SELECT COUNT(*) FROM query_logs')
+    analytics['total_queries'] = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM query_logs WHERE success = 1')
+    successful_queries = cursor.fetchone()[0]
+    analytics['success_rate'] = (successful_queries / analytics['total_queries'] * 100) if analytics['total_queries'] > 0 else 0
+    cursor.execute('SELECT task_type, COUNT(*) FROM query_logs GROUP BY task_type ORDER BY COUNT(*) DESC')
+    analytics['queries_by_task'] = cursor.fetchall()
+    cursor.execute('SELECT COUNT(*) FROM users')
+    analytics['total_users'] = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(DISTINCT user_email) FROM query_logs WHERE timestamp >= datetime("now", "-7 days")')
+    analytics['active_users_7d'] = cursor.fetchone()[0]
+    cursor.execute('SELECT AVG(query_length) FROM query_logs')
+    avg_length = cursor.fetchone()[0]
+    analytics['avg_query_length'] = round(avg_length, 0) if avg_length else 0
+    cursor.execute('SELECT SUM(tokens_used) FROM query_logs WHERE tokens_used IS NOT NULL')
+    total_tokens = cursor.fetchone()[0]
+    analytics['total_tokens'] = total_tokens if total_tokens else 0
+    return analytics
+
+def get_analytics_data_cached(force_refresh=False):
+    now = datetime.now()
+    if (force_refresh or st.session_state.last_analytics_update is None or 
+        now - st.session_state.last_analytics_update > timedelta(seconds=30)):
+        analytics = get_analytics_data()
+        st.session_state.cached_analytics = analytics
+        st.session_state.last_analytics_update = now
+        return analytics, True
+    else:
+        return st.session_state.cached_analytics, False
+
+# === Session State ===
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user_email" not in st.session_state:
@@ -413,10 +297,6 @@ if "is_admin" not in st.session_state:
 if "query_count" not in st.session_state:
     st.session_state.query_count = 0
     st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
-if "last_analytics_update" not in st.session_state:
-    st.session_state.last_analytics_update = None
-if "cached_analytics" not in st.session_state:
-    st.session_state.cached_analytics = None
 if "current_page" not in st.session_state:
     st.session_state.current_page = "Home"
 if "formatted_sql" not in st.session_state:
@@ -425,6 +305,10 @@ if "selected_history_query" not in st.session_state:
     st.session_state.selected_history_query = None
 if "current_sql_query" not in st.session_state:
     st.session_state.current_sql_query = ""
+if "last_analytics_update" not in st.session_state:
+    st.session_state.last_analytics_update = None
+if "cached_analytics" not in st.session_state:
+    st.session_state.cached_analytics = None
 
 # === Header ===
 st.markdown("""
@@ -434,7 +318,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# === Login/Register UI ===
+# === Login/Register ===
 if not st.session_state.logged_in:
     col1, col2, col3 = st.columns([1, 2, 1])
     
@@ -476,7 +360,6 @@ if not st.session_state.logged_in:
                     add_user(new_email, new_name, new_password)
                     st.success("Account created successfully! Please log in.")
 
-        # Add some info cards
         st.markdown("---")
         col_info1, col_info2, col_info3 = st.columns(3)
         
@@ -506,7 +389,7 @@ if not st.session_state.logged_in:
 
     st.stop()
 
-# === Sidebar Navigation ===
+# === Sidebar ===
 with st.sidebar:
     st.markdown(f"""
     <div class="status-card">
@@ -516,12 +399,8 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    # Navigation section - only show once
     st.markdown("### Navigation")
     
-    st.markdown("### Navigation")
-    
-    # Navigation buttons with simple active state
     if st.button("Home", key="nav_home", use_container_width=True, 
                  type="primary" if st.session_state.current_page == "Home" else "secondary"):
         st.session_state.current_page = "Home"
@@ -550,9 +429,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Usage information for non-admin users
     if not st.session_state.is_admin:
-        # Reset query count if necessary
         if datetime.now() >= st.session_state.query_reset_time:
             st.session_state.query_count = 0
             st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
@@ -570,11 +447,11 @@ with st.sidebar:
         if st.session_state.query_count >= 5:
             st.error("Daily limit reached")
     else:
+        st.markdown("### Usage")
         st.success("Unlimited queries")
     
     st.markdown("---")
     
-    # Settings
     st.markdown("### Settings")
     if st.button("Logout", use_container_width=True, type="secondary"):
         st.session_state.logged_in = False
@@ -583,15 +460,13 @@ with st.sidebar:
         st.session_state.current_page = "Home"
         st.rerun()
 
-# === Main Content Area ===
+# === Main Content ===
 if st.session_state.current_page == "Home":
-    # Dashboard/Home page
     col1, col2 = st.columns([2, 1])
     
     with col1:
         st.markdown("## Quick Start")
         
-        # Quick actions
         col_action1, col_action2 = st.columns(2)
         
         with col_action1:
@@ -604,15 +479,9 @@ if st.session_state.current_page == "Home":
                 st.session_state.current_page = "Analytics"
                 st.rerun()
         
-        # Recent activity if available
         st.markdown("## Recent Activity")
-        cursor.execute('''
-        SELECT task_type, timestamp 
-        FROM query_logs 
-        WHERE user_email = ?
-        ORDER BY timestamp DESC 
-        LIMIT 5
-        ''', (st.session_state.user_email,))
+        cursor.execute('SELECT task_type, timestamp FROM query_logs WHERE user_email = ? ORDER BY timestamp DESC LIMIT 5',
+                       (st.session_state.user_email,))
         recent_activity = cursor.fetchall()
         
         if recent_activity:
@@ -625,7 +494,6 @@ if st.session_state.current_page == "Home":
     with col2:
         st.markdown("## Your Stats")
         
-        # User's personal stats
         cursor.execute('SELECT COUNT(*) FROM query_logs WHERE user_email = ?', (st.session_state.user_email,))
         user_queries = cursor.fetchone()[0]
         
@@ -641,25 +509,20 @@ if st.session_state.current_page == "Home":
             st.metric("Daily Remaining", 5 - st.session_state.query_count)
 
 elif st.session_state.current_page == "Optimizer":
-    # SQL Optimizer page
     st.markdown("## SQL Query Optimizer")
     
-    # Main optimizer interface
-    st.markdown("""
-    <div class="query-container">
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="query-container">', unsafe_allow_html=True)
     
     col1, col2 = st.columns([3, 1])
     
     with col1:
-        # Use history query if selected, formatted SQL if available, otherwise use current stored query
         default_value = ""
         if st.session_state.selected_history_query:
             default_value = st.session_state.selected_history_query
-            st.session_state.selected_history_query = None  # Clear after using
+            st.session_state.selected_history_query = None
         elif st.session_state.formatted_sql:
             default_value = st.session_state.formatted_sql
-            st.session_state.formatted_sql = None  # Clear after using
+            st.session_state.formatted_sql = None
         else:
             default_value = st.session_state.current_sql_query
         
@@ -672,116 +535,70 @@ elif st.session_state.current_page == "Optimizer":
             key="sql_input"
         )
         
-        # Store the current query in session state to persist across reruns
         if sql_query != st.session_state.current_sql_query:
             st.session_state.current_sql_query = sql_query
         
-        # Add JavaScript to handle tab key in textarea
         st.components.v1.html("""
         <script>
         function enableTabs() {
             const textarea = parent.document.querySelector('textarea[aria-label="SQL Query"]');
             if (textarea) {
-                // Remove any existing listeners
-                textarea.onkeydown = null;
-                
                 textarea.addEventListener('keydown', function(e) {
                     if (e.key === 'Tab') {
                         e.preventDefault();
-                        
                         const start = this.selectionStart;
                         const end = this.selectionEnd;
                         const value = this.value;
                         
                         if (e.shiftKey) {
-                            // Shift+Tab: Remove indentation from selected lines
                             const beforeSelection = value.substring(0, start);
-                            const selectedText = value.substring(start, end);
-                            const afterSelection = value.substring(end);
-                            
-                            // Find the start of the first line in selection
                             const firstLineStart = beforeSelection.lastIndexOf('\\n') + 1;
                             const textBeforeFirstLine = value.substring(0, firstLineStart);
                             const selectedWithFirstLine = value.substring(firstLineStart, end);
-                            
-                            // Remove 4 spaces or 1 tab from each line
                             const unindentedText = selectedWithFirstLine.replace(/^(    |\\t)/gm, '');
-                            
-                            // Calculate new cursor position
                             const removedChars = selectedWithFirstLine.length - unindentedText.length;
                             
-                            this.value = textBeforeFirstLine + unindentedText + afterSelection;
+                            this.value = textBeforeFirstLine + unindentedText + value.substring(end);
                             this.selectionStart = Math.max(firstLineStart, start - Math.min(4, removedChars));
                             this.selectionEnd = Math.max(this.selectionStart, end - removedChars);
-                            
                         } else {
-                            // Tab: Add indentation
                             if (start === end) {
-                                // No selection - just insert 4 spaces
                                 this.value = value.substring(0, start) + '    ' + value.substring(end);
                                 this.selectionStart = this.selectionEnd = start + 4;
                             } else {
-                                // Selection exists - indent all selected lines
                                 const beforeSelection = value.substring(0, start);
-                                const selectedText = value.substring(start, end);
-                                const afterSelection = value.substring(end);
-                                
-                                // Find the start of the first line in selection
                                 const firstLineStart = beforeSelection.lastIndexOf('\\n') + 1;
                                 const textBeforeFirstLine = value.substring(0, firstLineStart);
                                 const selectedWithFirstLine = value.substring(firstLineStart, end);
-                                
-                                // Add 4 spaces to each line
                                 const indentedText = selectedWithFirstLine.replace(/^/gm, '    ');
-                                
-                                // Calculate new selection
                                 const addedChars = indentedText.length - selectedWithFirstLine.length;
                                 
-                                this.value = textBeforeFirstLine + indentedText + afterSelection;
+                                this.value = textBeforeFirstLine + indentedText + value.substring(end);
                                 this.selectionStart = start + 4;
                                 this.selectionEnd = end + addedChars;
                             }
                         }
-                        
-                        // Trigger input event to update Streamlit
                         this.dispatchEvent(new Event('input', { bubbles: true }));
                     }
                 });
-                
-                console.log('Tab handling enabled for SQL textarea');
                 return true;
             }
             return false;
         }
         
-        // Try to enable tabs with better timing
         let attempts = 0;
-        const maxAttempts = 20;
-        
         function tryEnable() {
-            if (enableTabs()) {
-                console.log('Tab handling successfully enabled');
-                return;
-            }
-            
+            if (enableTabs()) return;
             attempts++;
-            if (attempts < maxAttempts) {
-                setTimeout(tryEnable, 200);
-            }
+            if (attempts < 20) setTimeout(tryEnable, 200);
         }
-        
         tryEnable();
         </script>
         """, height=0)
     
     with col2:
-        task = st.selectbox(
-            "Analysis Type",
-            ["Explain", "Optimize", "Detect Issues", "Test"],
-            help="Choose what you want to do with your SQL query"
-        )
+        task = st.selectbox("Analysis Type", ["Explain", "Optimize", "Detect Issues", "Test"])
         
-        # Task descriptions
         task_descriptions = {
             "Explain": "Get a detailed step-by-step explanation",
             "Optimize": "Improve performance and efficiency", 
@@ -791,27 +608,20 @@ elif st.session_state.current_page == "Optimizer":
         
         st.info(task_descriptions[task])
         
-        # Format SQL button
-        if st.button("Format SQL", use_container_width=True, help="Clean up SQL formatting with proper indentation and capitalization"):
+        if st.button("Format SQL", use_container_width=True):
             if sql_query.strip():
                 formatted_sql = format_sql(sql_query)
-                # Update both the formatted SQL and current query state
                 st.session_state.formatted_sql = formatted_sql
                 st.session_state.current_sql_query = formatted_sql
                 st.rerun()
             else:
                 st.warning("Please enter SQL code to format")
         
-        analyze_button = st.button(
-            "Analyze Query", 
-            use_container_width=True, 
-            type="primary",
-            disabled=(not st.session_state.is_admin and st.session_state.query_count >= 5)
-        )
+        analyze_button = st.button("Analyze Query", use_container_width=True, type="primary",
+                                  disabled=(not st.session_state.is_admin and st.session_state.query_count >= 5))
     
     st.markdown("</div>", unsafe_allow_html=True)
     
-    # Process the query
     if analyze_button:
         if not sql_query.strip():
             st.error("Please enter a SQL query.")
@@ -821,7 +631,6 @@ elif st.session_state.current_page == "Optimizer":
             if not st.session_state.is_admin:
                 st.session_state.query_count += 1
             
-            # GPT Analysis
             model = "gpt-4o-mini"
             temperature = 0.3
             max_tokens = 1500
@@ -995,33 +804,19 @@ SQL Query to Test:
                     )
                     reply = response.choices[0].message.content
                     
-                    # Log successful query
-                    log_query(
-                        user_email=st.session_state.user_email,
-                        task_type=task,
-                        query_length=len(sql_query),
-                        tokens_used=token_estimate,
-                        success=True
-                    )
+                    log_query(user_email=st.session_state.user_email, task_type=task, 
+                             query_length=len(sql_query), tokens_used=token_estimate, success=True)
                     
-                    # Save to query history - make sure this happens
                     try:
-                        history_id = save_query_to_history(
-                            user_email=st.session_state.user_email,
-                            query_text=sql_query,
-                            task_type=task,
-                            result_text=reply
-                        )
-                        # Show success message with confirmation
+                        history_id = save_query_to_history(user_email=st.session_state.user_email, 
+                                                         query_text=sql_query, task_type=task, result_text=reply)
                         st.success(f"Analysis complete! (Saved to history: ID {history_id})")
                     except Exception as history_error:
                         st.error(f"Analysis complete but failed to save to history: {str(history_error)}")
                         history_id = None
                     
-                    # Results in a nice container
                     st.markdown("### Analysis Results")
                     
-                    # Add save options
                     col_save1, col_save2, col_save3 = st.columns([2, 1, 1])
                     with col_save1:
                         st.markdown(f"**Task:** {task}")
@@ -1042,7 +837,6 @@ SQL Query to Test:
                     st.markdown("---")
                     st.markdown(reply)
                     
-                    # Footer info
                     col_info1, col_info2, col_info3 = st.columns(3)
                     with col_info1:
                         st.caption(f"Tokens used: {token_estimate}")
@@ -1052,22 +846,171 @@ SQL Query to Test:
                         st.download_button("Download Results", reply, file_name=f"sql_analysis_{task.lower()}.txt")
                     
                 except Exception as e:
-                    # Log failed query
-                    log_query(
-                        user_email=st.session_state.user_email,
-                        task_type=task,
-                        query_length=len(sql_query),
-                        success=False,
-                        error_message=str(e)
-                    )
-                    
+                    log_query(user_email=st.session_state.user_email, task_type=task, 
+                             query_length=len(sql_query), success=False, error_message=str(e))
                     st.error(f"Error: {str(e)}")
 
+elif st.session_state.current_page == "History":
+    st.markdown("## Query History")
+    
+    with st.expander("Debug Info"):
+        st.write(f"Current user: {st.session_state.user_email}")
+        
+        cursor.execute('SELECT COUNT(*) FROM query_history WHERE user_email = ?', (st.session_state.user_email,))
+        total_queries = cursor.fetchone()[0]
+        st.write(f"Total queries in history: {total_queries}")
+        
+        cursor.execute('SELECT COUNT(*) FROM query_history')
+        all_queries = cursor.fetchone()[0] 
+        st.write(f"Total queries in database (all users): {all_queries}")
+        
+        cursor.execute('SELECT id, query_text, task_type, timestamp FROM query_history WHERE user_email = ? ORDER BY timestamp DESC LIMIT 3', 
+                       (st.session_state.user_email,))
+        recent_entries = cursor.fetchall()
+        if recent_entries:
+            st.write("Your recent entries:")
+            for entry in recent_entries:
+                st.write(f"ID: {entry[0]}, Task: {entry[2]}, Time: {entry[3]}")
+                st.write(f"Query snippet: {entry[1][:50]}...")
+        else:
+            st.write("No entries found for your account")
+            
+        cursor.execute('SELECT user_email, task_type, timestamp FROM query_history ORDER BY timestamp DESC LIMIT 5')
+        all_recent = cursor.fetchall()
+        if all_recent:
+            st.write("Recent entries (all users):")
+            for entry in all_recent:
+                st.write(f"User: {entry[0]}, Task: {entry[1]}, Time: {entry[2]}")
+    
+    history = get_user_query_history(st.session_state.user_email)
+    favorites = get_user_favorites(st.session_state.user_email)
+    
+    tab1, tab2 = st.tabs(["Recent Queries", "Favorites"])
+    
+    with tab1:
+        st.markdown("### Your Recent Queries")
+        
+        if history:
+            col_search1, col_search2 = st.columns([2, 1])
+            with col_search1:
+                search_term = st.text_input("Search queries:", placeholder="Search by SQL content or name...")
+            with col_search2:
+                task_filter = st.selectbox("Filter by task:", ["All", "Explain", "Optimize", "Detect Issues", "Test"])
+            
+            filtered_history = []
+            for item in history:
+                query_id, query_text, task_type, result_text, is_favorite, query_name, timestamp = item
+                
+                if task_filter != "All" and task_type != task_filter:
+                    continue
+                
+                if search_term:
+                    search_lower = search_term.lower()
+                    if (search_lower not in query_text.lower() and 
+                        (not query_name or search_lower not in query_name.lower())):
+                        continue
+                
+                filtered_history.append(item)
+            
+            if filtered_history:
+                st.caption(f"Showing {len(filtered_history)} of {len(history)} queries")
+                
+                for item in filtered_history:
+                    query_id, query_text, task_type, result_text, is_favorite, query_name, timestamp = item
+                    
+                    display_name = query_name if query_name else f"{task_type} - {timestamp[:10]}"
+                    with st.expander(f"{'⭐ ' if is_favorite else ''}{display_name}", expanded=False):
+                        
+                        col_details1, col_details2, col_details3 = st.columns([2, 1, 1])
+                        with col_details1:
+                            st.markdown(f"**Task:** {task_type}")
+                            st.markdown(f"**Date:** {timestamp}")
+                        with col_details2:
+                            st.markdown(f"**Length:** {len(query_text)} chars")
+                            if query_name:
+                                st.markdown(f"**Name:** {query_name}")
+                        with col_details3:
+                            col_btn1, col_btn2, col_btn3 = st.columns(3)
+                            with col_btn1:
+                                if st.button("Use", key=f"use_{query_id}", help="Load this query in optimizer"):
+                                    st.session_state.selected_history_query = query_text
+                                    st.session_state.current_page = "Optimizer"
+                                    st.rerun()
+                            with col_btn2:
+                                fav_label = "Unfav" if is_favorite else "Fav"
+                                if st.button(fav_label, key=f"fav_{query_id}", help="Toggle favorite"):
+                                    toggle_favorite(query_id)
+                                    st.rerun()
+                            with col_btn3:
+                                if st.button("Delete", key=f"del_{query_id}", help="Delete from history", type="secondary"):
+                                    if delete_query_from_history(query_id, st.session_state.user_email):
+                                        st.success("Query deleted!")
+                                        st.rerun()
+                        
+                        st.markdown("**SQL Query:**")
+                        st.code(query_text, language="sql")
+                        
+                        if result_text:
+                            with st.expander("View Analysis Result"):
+                                st.markdown(result_text)
+            else:
+                if search_term or task_filter != "All":
+                    st.info("No queries match your search criteria.")
+                else:
+                    st.info("No queries found.")
+        else:
+            st.info("No query history yet. Start by analyzing some SQL queries!")
+    
+    with tab2:
+        st.markdown("### Your Favorite Queries")
+        
+        if favorites:
+            st.caption(f"{len(favorites)} favorite queries")
+            
+            for item in favorites:
+                query_id, query_text, task_type, result_text, query_name, timestamp = item
+                
+                display_name = query_name if query_name else f"{task_type} - {timestamp[:10]}"
+                with st.expander(f"⭐ {display_name}", expanded=False):
+                    
+                    col_fav1, col_fav2 = st.columns([3, 1])
+                    with col_fav1:
+                        st.markdown(f"**Task:** {task_type} | **Date:** {timestamp}")
+                        if query_name:
+                            st.markdown(f"**Name:** {query_name}")
+                    with col_fav2:
+                        col_fav_btn1, col_fav_btn2 = st.columns(2)
+                        with col_fav_btn1:
+                            if st.button("Use", key=f"use_fav_{query_id}"):
+                                st.session_state.selected_history_query = query_text
+                                st.session_state.current_page = "Optimizer"
+                                st.rerun()
+                        with col_fav_btn2:
+                            if st.button("Unfav", key=f"unfav_{query_id}", type="secondary"):
+                                toggle_favorite(query_id)
+                                st.rerun()
+                    
+                    col_rename1, col_rename2 = st.columns([2, 1])
+                    with col_rename1:
+                        new_name = st.text_input("Rename:", value=query_name or "", key=f"rename_{query_id}")
+                    with col_rename2:
+                        if st.button("Update Name", key=f"update_{query_id}"):
+                            if update_query_name(query_id, st.session_state.user_email, new_name.strip()):
+                                st.success("Name updated!")
+                                st.rerun()
+                    
+                    st.markdown("**SQL Query:**")
+                    st.code(query_text, language="sql")
+                    
+                    if result_text:
+                        with st.expander("View Analysis Result"):
+                            st.markdown(result_text)
+        else:
+            st.info("No favorite queries yet. Star some queries from your history to see them here!")
+
 elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
-    # Analytics Dashboard
     st.markdown("## Analytics Dashboard")
     
-    # Refresh controls
     col_refresh1, col_refresh2, col_refresh3, col_refresh4 = st.columns([1, 1, 1, 2])
     
     with col_refresh1:
@@ -1079,10 +1022,8 @@ elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
     with col_refresh3:
         refresh_rate = st.selectbox("Rate (s)", [15, 30, 60], index=1)
     
-    # Get analytics data
     analytics_data, is_fresh = get_analytics_data_cached(force_refresh=manual_refresh)
     
-    # Show data freshness
     with col_refresh4:
         if st.session_state.last_analytics_update:
             last_update = st.session_state.last_analytics_update
@@ -1095,120 +1036,95 @@ elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
             else:
                 st.warning(f"Updated {int(age_seconds/60)}m ago")
     
-    # Auto-refresh logic
     if auto_refresh:
         if st.session_state.last_analytics_update:
             age = (datetime.now() - st.session_state.last_analytics_update).total_seconds()
             if age >= refresh_rate:
                 st.rerun()
     
-    # Key Metrics
     st.markdown("### Key Metrics")
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric(
-            label="Total Users",
-            value=analytics_data['total_users'],
-            delta=f"{analytics_data['active_users_7d']} active (7d)"
-        )
+        st.metric(label="Total Users", value=analytics_data['total_users'], 
+                 delta=f"{analytics_data['active_users_7d']} active (7d)")
     
     with col2:
-        st.metric(
-            label="Total Queries", 
-            value=analytics_data['total_queries'],
-            delta=f"{analytics_data['success_rate']:.1f}% success rate"
-        )
+        st.metric(label="Total Queries", value=analytics_data['total_queries'],
+                 delta=f"{analytics_data['success_rate']:.1f}% success rate")
     
     with col3:
         estimated_cost = (analytics_data['total_tokens'] / 1000) * 0.000150
-        st.metric(
-            label="API Costs",
-            value=f"${estimated_cost:.3f}",
-            delta=f"{analytics_data['total_tokens']:,} tokens"
-        )
+        st.metric(label="API Costs", value=f"${estimated_cost:.3f}",
+                 delta=f"{analytics_data['total_tokens']:,} tokens")
     
     with col4:
         popular_task = analytics_data['queries_by_task'][0][0] if analytics_data['queries_by_task'] else "None"
-        st.metric(
-            label="Most Popular Task",
-            value=popular_task,
-            delta=f"Avg {analytics_data['avg_query_length']} chars/query"
-        )
+        st.metric(label="Most Popular Task", value=popular_task,
+                 delta=f"Avg {analytics_data['avg_query_length']} chars/query")
     
-    # Detailed Analytics
     tab1, tab2, tab3, tab4 = st.tabs(["Usage Trends", "User Activity", "Task Types", "Errors"])
     
     with tab1:
-        col_chart1, col_chart2 = st.columns([2, 1])
+        st.markdown("#### Query Activity")
+        cursor.execute('''SELECT user_email, task_type, timestamp FROM query_logs 
+                         WHERE timestamp >= datetime('now', '-2 hours') ORDER BY timestamp DESC LIMIT 8''')
+        recent_queries = cursor.fetchall()
         
-        with col_chart1:
-            st.markdown("#### Daily Query Volume (Last 30 Days)")
-            if analytics_data['daily_activity']:
-                df_daily = pd.DataFrame(analytics_data['daily_activity'], columns=['Date', 'Queries'])
-                st.bar_chart(df_daily.set_index('Date'), use_container_width=True)
-            else:
-                st.info("No data available yet")
-        
-        with col_chart2:
-            st.markdown("#### Live Activity Feed")
-            cursor.execute('''
-            SELECT user_email, task_type, timestamp 
-            FROM query_logs 
-            WHERE timestamp >= datetime('now', '-2 hours')
-            ORDER BY timestamp DESC 
-            LIMIT 8
-            ''')
-            recent_queries = cursor.fetchall()
-            
-            if recent_queries:
-                for query in recent_queries:
-                    email, task, timestamp = query
-                    query_time = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
-                    time_ago = datetime.now() - query_time
-                    
-                    if time_ago.seconds < 60:
-                        time_str = f"{time_ago.seconds}s ago"
-                    elif time_ago.seconds < 3600:
-                        time_str = f"{time_ago.seconds//60}m ago"
-                    else:
-                        time_str = f"{time_ago.seconds//3600}h ago"
-                    
-                    st.markdown(f"**{email}** used *{task}* {time_str}")
-            else:
-                st.info("No recent activity")
+        if recent_queries:
+            for query in recent_queries:
+                email, task, timestamp = query
+                query_time = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+                time_ago = datetime.now() - query_time
+                
+                if time_ago.seconds < 60:
+                    time_str = f"{time_ago.seconds}s ago"
+                elif time_ago.seconds < 3600:
+                    time_str = f"{time_ago.seconds//60}m ago"
+                else:
+                    time_str = f"{time_ago.seconds//3600}h ago"
+                
+                st.markdown(f"**{email}** used *{task}* {time_str}")
+        else:
+            st.info("No recent activity")
     
     with tab2:
-        if analytics_data['top_users']:
-            df_users = pd.DataFrame(analytics_data['top_users'], columns=['Email', 'Name', 'Query Count'])
+        cursor.execute('''SELECT ql.user_email, u.name, COUNT(*) as query_count 
+                         FROM query_logs ql LEFT JOIN users u ON ql.user_email = u.email 
+                         GROUP BY ql.user_email ORDER BY query_count DESC LIMIT 10''')
+        top_users = cursor.fetchall()
+        
+        if top_users:
+            df_users = pd.DataFrame(top_users, columns=['Email', 'Name', 'Query Count'])
             st.dataframe(df_users, use_container_width=True)
         else:
             st.info("No user data available yet")
     
     with tab3:
-        col_task1, col_task2 = st.columns([1, 1])
-        
-        with col_task1:
-            if analytics_data['queries_by_task']:
+        if analytics_data['queries_by_task']:
+            col_task1, col_task2 = st.columns([1, 1])
+            
+            with col_task1:
                 df_tasks = pd.DataFrame(analytics_data['queries_by_task'], columns=['Task Type', 'Count'])
                 st.bar_chart(df_tasks.set_index('Task Type'), use_container_width=True)
-        
-        with col_task2:
-            if analytics_data['queries_by_task']:
+            
+            with col_task2:
                 st.dataframe(df_tasks, use_container_width=True)
-            else:
-                st.info("No task data available yet")
+        else:
+            st.info("No task data available yet")
     
     with tab4:
-        if analytics_data['recent_errors']:
-            df_errors = pd.DataFrame(analytics_data['recent_errors'], 
-                                   columns=['User Email', 'Task Type', 'Error', 'Timestamp'])
+        cursor.execute('''SELECT user_email, task_type, error_message, timestamp FROM query_logs 
+                         WHERE success = 0 ORDER BY timestamp DESC LIMIT 10''')
+        recent_errors = cursor.fetchall()
+        
+        if recent_errors:
+            df_errors = pd.DataFrame(recent_errors, columns=['User Email', 'Task Type', 'Error', 'Timestamp'])
             st.dataframe(df_errors, use_container_width=True)
         else:
             st.success("No recent errors!")
 
 elif st.session_state.current_page == "Users" and st.session_state.is_admin:
-    # User Management page
     st.markdown("## User Management")
     
     tab1, tab2, tab3 = st.tabs(["All Users", "Manage Users", "User Analytics"])
@@ -1273,18 +1189,11 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
     with tab3:
         st.markdown("#### Individual User Statistics")
         
-        # User activity breakdown
-        cursor.execute('''
-        SELECT 
-            u.email, u.name,
-            COUNT(ql.id) as total_queries,
-            SUM(CASE WHEN ql.success = 1 THEN 1 ELSE 0 END) as successful_queries,
-            MAX(ql.timestamp) as last_activity
-        FROM users u
-        LEFT JOIN query_logs ql ON u.email = ql.user_email
-        GROUP BY u.email, u.name
-        ORDER BY total_queries DESC
-        ''')
+        cursor.execute('''SELECT u.email, u.name, COUNT(ql.id) as total_queries,
+                         SUM(CASE WHEN ql.success = 1 THEN 1 ELSE 0 END) as successful_queries,
+                         MAX(ql.timestamp) as last_activity
+                         FROM users u LEFT JOIN query_logs ql ON u.email = ql.user_email
+                         GROUP BY u.email, u.name ORDER BY total_queries DESC''')
         
         user_stats = cursor.fetchall()
         
@@ -1304,14 +1213,8 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
                         st.metric("Last Activity", last_activity or "Never")
                     
                     if total > 0:
-                        # Get task breakdown for this user
-                        cursor.execute('''
-                        SELECT task_type, COUNT(*) as count
-                        FROM query_logs 
-                        WHERE user_email = ?
-                        GROUP BY task_type
-                        ''', (email,))
-                        
+                        cursor.execute('SELECT task_type, COUNT(*) as count FROM query_logs WHERE user_email = ? GROUP BY task_type', 
+                                     (email,))
                         user_tasks = cursor.fetchall()
                         if user_tasks:
                             st.markdown("**Task Breakdown:**")
@@ -1320,7 +1223,6 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
         else:
             st.info("No user activity data available")
 
-# === Footer ===
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; padding: 2rem 0;">
