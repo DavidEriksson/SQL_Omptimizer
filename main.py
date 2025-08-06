@@ -4,6 +4,7 @@ import tiktoken
 from datetime import datetime, timedelta
 import yaml
 import streamlit_authenticator as stauth
+import os
 from pathlib import Path
 
 # === Secrets ===
@@ -11,25 +12,41 @@ OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]  # List of admin emails
 COOKIE_KEY = st.secrets["COOKIE_KEY"]
 
-# === Load or create users.yaml ===
-users_file = Path("users.yaml")
-if not users_file.exists():
-    with users_file.open("w") as f:
-        yaml.dump({"credentials": {"usernames": {}}}, f)
+USERS_FILE = "users.yaml"
 
-with users_file.open("r") as f:
+# === Load users.yaml safely ===
+if not os.path.exists(USERS_FILE):
+    with open(USERS_FILE, "w") as f:
+        yaml.dump({
+            "credentials": {
+                "usernames": {}
+            },
+            "cookie": {
+                "expiry_days": 30,
+                "key": st.secrets["COOKIE_KEY"],
+                "name": "sql_optimizer_login"
+            },
+            "preauthorized": {
+                "emails": []
+            }
+        }, f)
+
+with open(USERS_FILE, "r") as f:
     config = yaml.safe_load(f)
 
-if not config or "credentials" not in config:
-    config = {
-        "credentials": {"usernames": {}},
-        "cookie": {
-            "expiry_days": 30,
-            "key": COOKIE_KEY,
-            "name": "sql_optimizer_login"
-        },
-        "preauthorized": {"emails": []}
+# Ensure structure exists (even if file is empty or malformed)
+if not config:
+    config = {}
+if "credentials" not in config:
+    config["credentials"] = {"usernames": {}}
+if "cookie" not in config:
+    config["cookie"] = {
+        "expiry_days": 30,
+        "key": st.secrets["COOKIE_KEY"],
+        "name": "sql_optimizer_login"
     }
+if "preauthorized" not in config:
+    config["preauthorized"] = {"emails": []}
 
 authenticator = stauth.Authenticate(
     config,
