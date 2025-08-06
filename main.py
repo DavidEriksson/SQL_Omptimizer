@@ -6,16 +6,39 @@ from datetime import datetime, timedelta
 import openai
 import tiktoken
 
-# === Load secrets ===
+# === Secrets ===
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 COOKIE_KEY = st.secrets["COOKIE_KEY"]
-ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]  # list of admin emails (from .streamlit/secrets.toml)
+ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]  # List of emails
 
-# === Load users.yaml ===
-with open("users.yaml") as file:
+# === Create users.yaml if missing ===
+if not os.path.exists("users.yaml"):
+    default_user = {
+        "credentials": {
+            "usernames": {
+                "test@example.com": {
+                    "email": "test@example.com",
+                    "name": "Test Admin",
+                    "password": "$2b$12$kW8iElbYVXNLxjv6mQWnZORqB9V2FClzJvnUDT0bbPHb8Qbs47yqO"  # test1234
+                }
+            }
+        },
+        "cookie": {
+            "expiry_days": 30,
+            "name": "sql_optimizer_login"
+        },
+        "preauthorized": {
+            "emails": ["test@example.com"]
+        }
+    }
+    with open("users.yaml", "w") as f:
+        yaml.dump(default_user, f)
+
+# === Load config ===
+with open("users.yaml", "r") as file:
     config = yaml.safe_load(file)
 
-# === Init authenticator ===
+# === Authenticator ===
 authenticator = stauth.Authenticate(
     config,
     cookie_name="sql_optimizer_login",
@@ -23,29 +46,39 @@ authenticator = stauth.Authenticate(
     cookie_expiry_days=30
 )
 
-# === Login/Register UI ===
-auth_option = st.sidebar.radio("Account", ("Login", "Register"))
+# === Sidebar Login/Register ===
+st.sidebar.title("Account")
+auth_option = st.sidebar.radio("Choose:", ("Login", "Register"))
 
 if auth_option == "Register":
     try:
         email, username, password = authenticator.register_user(preauthorization=False)
         if email:
-            st.success("User registered. Please log in.")
+            st.success("✅ User registered. Please log in.")
+            # Add to config and save to file
+            config["credentials"]["usernames"][email] = {
+                "email": email,
+                "name": username,
+                "password": password
+            }
+            with open("users.yaml", "w") as f:
+                yaml.dump(config, f)
+            st.stop()
     except Exception as e:
         st.error(f"Registration error: {str(e)}")
+        st.stop()
 
 name, auth_status, username = authenticator.login("Login", "main")
 
 if not auth_status:
     st.stop()
 
-# === Logged in ===
 email = username
 is_admin = email in ADMIN_EMAILS
 
 authenticator.logout("Logout", "sidebar")
 
-# === Streamlit UI ===
+# === UI Setup ===
 st.set_page_config(page_title="SQL Optimizer AI", layout="centered")
 st.title("SQL Optimizer")
 st.success(f"👋 Welcome {name} ({email})")
@@ -79,7 +112,6 @@ temperature = 0.3
 max_tokens = 1500
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-# === Token Counter ===
 def estimate_tokens(text):
     enc = tiktoken.encoding_for_model(model)
     return len(enc.encode(text))
@@ -87,7 +119,6 @@ def estimate_tokens(text):
 if "run_analysis" not in st.session_state:
     st.session_state.run_analysis = False
 
-# === Run Button ===
 if st.button("Run"):
     if not sql_query.strip():
         st.error("❌ Please enter a SQL query.")
@@ -99,7 +130,6 @@ if st.button("Run"):
         st.session_state.run_analysis = True
         st.rerun()
 
-# === Prompt Builder + GPT Logic ===
 if st.session_state.run_analysis:
     prompt_templates = {
         "Explain": f"""
