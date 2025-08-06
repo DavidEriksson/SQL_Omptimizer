@@ -139,7 +139,7 @@ if st.session_state.is_admin:
         
         with tab1:
             st.subheader("All Users")
-            cursor.execute('SELECT email, name, admin FROM users')
+            cursor.execute('SELECT email, name, is_admin FROM users')
             users = cursor.fetchall()
             
             if users:
@@ -152,7 +152,7 @@ if st.session_state.is_admin:
         
         with tab2:
             st.subheader("Make User Admin")
-            cursor.execute('SELECT email, name FROM users WHERE admin = 0 OR admin IS NULL')
+            cursor.execute('SELECT email, name FROM users WHERE is_admin = 0 OR is_admin IS NULL')
             regular_users = cursor.fetchall()
             
             if regular_users:
@@ -160,7 +160,7 @@ if st.session_state.is_admin:
                 selected_email = st.selectbox("Select user to make admin:", user_emails)
                 
                 if st.button("Grant Admin Access"):
-                    cursor.execute('UPDATE users SET admin = 1 WHERE email = ?', (selected_email,))
+                    cursor.execute('UPDATE users SET is_admin = 1 WHERE email = ?', (selected_email,))
                     conn.commit()
                     st.success(f"✅ {selected_email} is now an admin!")
                     st.rerun()
