@@ -82,23 +82,17 @@ st.markdown("""
         transition: all 0.2s ease;
     }
     
-    /* Custom navigation styling */
-    .nav-active {
+    /* Style buttons based on their text content */
+    div[data-testid="stSidebar"] button[kind="primary"] {
         background-color: #667eea !important;
         color: white !important;
-        border: 2px solid #667eea !important;
-        font-weight: 600 !important;
+        border: none !important;
     }
     
-    .nav-inactive {
-        background-color: transparent !important;
-        color: #a0aec0 !important;
-        border: 1px solid #4a5568 !important;
-    }
-    
-    .nav-inactive:hover {
+    div[data-testid="stSidebar"] button[kind="secondary"] {
         background-color: #4a5568 !important;
-        color: white !important;
+        color: #cbd5e0 !important;
+        border: none !important;
     }
     
     /* Fix text area styling */
@@ -512,56 +506,34 @@ with st.sidebar:
     
     st.markdown("### Navigation")
     
-    # Navigation buttons with visual indicators
-    current_page = st.session_state.current_page
+    st.markdown("### Navigation")
     
-    # Show current page indicator
-    st.markdown(f"**Current: {current_page}**")
-    st.markdown("---")
+    # Navigation buttons with simple active state
+    if st.button("Home", key="nav_home", use_container_width=True, 
+                 type="primary" if st.session_state.current_page == "Home" else "secondary"):
+        st.session_state.current_page = "Home"
+        st.rerun()
     
-    # Navigation buttons
-    col_nav1, col_nav2 = st.columns([3, 1])
+    if st.button("SQL Optimizer", key="nav_optimizer", use_container_width=True,
+                 type="primary" if st.session_state.current_page == "Optimizer" else "secondary"):
+        st.session_state.current_page = "Optimizer"
+        st.rerun()
     
-    with col_nav1:
-        if st.button("Home", key="nav_home", use_container_width=True):
-            st.session_state.current_page = "Home"
-            st.rerun()
-    with col_nav2:
-        if current_page == "Home":
-            st.markdown("**←**")
-    
-    with col_nav1:
-        if st.button("SQL Optimizer", key="nav_optimizer", use_container_width=True):
-            st.session_state.current_page = "Optimizer"
-            st.rerun()
-    with col_nav2:
-        if current_page == "Optimizer":
-            st.markdown("**←**")
-    
-    with col_nav1:
-        if st.button("Query History", key="nav_history", use_container_width=True):
-            st.session_state.current_page = "History"
-            st.rerun()
-    with col_nav2:
-        if current_page == "History":
-            st.markdown("**←**")
+    if st.button("Query History", key="nav_history", use_container_width=True,
+                 type="primary" if st.session_state.current_page == "History" else "secondary"):
+        st.session_state.current_page = "History"
+        st.rerun()
     
     if st.session_state.is_admin:
-        with col_nav1:
-            if st.button("Analytics", key="nav_analytics", use_container_width=True):
-                st.session_state.current_page = "Analytics"
-                st.rerun()
-        with col_nav2:
-            if current_page == "Analytics":
-                st.markdown("**←**")
+        if st.button("Analytics", key="nav_analytics", use_container_width=True,
+                     type="primary" if st.session_state.current_page == "Analytics" else "secondary"):
+            st.session_state.current_page = "Analytics"
+            st.rerun()
         
-        with col_nav1:
-            if st.button("User Management", key="nav_users", use_container_width=True):
-                st.session_state.current_page = "Users"
-                st.rerun()
-        with col_nav2:
-            if current_page == "Users":
-                st.markdown("**←**")
+        if st.button("User Management", key="nav_users", use_container_width=True,
+                     type="primary" if st.session_state.current_page == "Users" else "secondary"):
+            st.session_state.current_page = "Users"
+            st.rerun()
     
     st.markdown("---")
     
