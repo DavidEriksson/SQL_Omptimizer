@@ -15,14 +15,25 @@ ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]
 users_file = "users.yaml"
 if not os.path.exists(users_file):
     with open(users_file, "w") as f:
-        yaml.dump({
+        yaml.safe_dump({
             "credentials": {"usernames": {}},
             "cookie": {"expiry_days": 30},
             "preauthorized": {"emails": []}
         }, f)
 
-with open(users_file) as file:
+# Ladda konfigurationen
+with open(users_file, "r") as file:
     config = yaml.safe_load(file)
+
+# Fixa om nycklar saknas
+if "credentials" not in config:
+    config["credentials"] = {"usernames": {}}
+if "usernames" not in config["credentials"]:
+    config["credentials"]["usernames"] = {}
+if "cookie" not in config:
+    config["cookie"] = {"expiry_days": 30}
+if "preauthorized" not in config:
+    config["preauthorized"] = {"emails": []}
 
 # === Init autentisering ===
 authenticator = stauth.Authenticate(
