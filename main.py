@@ -35,6 +35,12 @@ if "cookie" not in config:
 if "preauthorized" not in config:
     config["preauthorized"] = {"emails": []}
 
+with open("users.yaml", "r") as file:
+    config = yaml.safe_load(file)
+    st.write("Config loaded:", config)  # TEMPORÄR DEBUGRAD
+
+
+
 # === Init autentisering ===
 authenticator = stauth.Authenticate(
     config,

@@ -2,5 +2,6 @@ credentials:
   usernames: {}
 cookie:
   expiry_days: 30
+  name: sql_optimizer_login
 preauthorized:
   emails: []
