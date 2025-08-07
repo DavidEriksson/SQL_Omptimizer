@@ -466,7 +466,7 @@ with st.sidebar:
     st.markdown(f"""
     <div class="status-card">
         <h3>Welcome</h3>
-        <p><strong>{st.session_state.user_email}</strong></p>
+        <p><strong>{st.session_state.user_name}</strong></p>
         <p>{"Admin Account" if st.session_state.is_admin else "Standard User"}</p>
     </div>
     """, unsafe_allow_html=True)
