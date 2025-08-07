@@ -7,14 +7,14 @@ import sqlite3
 import bcrypt
 import pandas as pd
 
-# === Load from Streamlit Secrets ===
+# === Load from Streamlit Secrets (for Streamlit Cloud) ===
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]
 
 # === Page Configuration ===
 st.set_page_config(
     page_title="SQL Optimizer AI",
-    page_icon="",
+    page_icon="🚀",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -91,27 +91,6 @@ st.markdown("""
         border-color: #667eea !important;
         box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
     }
-    
-    div[data-testid="stTabs"] > div[data-baseweb="tab-list"] {
-        gap: 8px !important;
-        background-color: transparent !important;
-    }
-    
-    div[data-testid="stTabs"] > div[data-baseweb="tab-list"] button[data-baseweb="tab"] {
-        height: 50px !important;
-        padding: 10px 20px !important;
-        background-color: #f0f2f6 !important;
-        border-radius: 10px !important;
-        color: #262730 !important;
-        border: none !important;
-        font-weight: 500 !important;
-        margin-right: 4px !important;
-    }
-    
-    div[data-testid="stTabs"] > div[data-baseweb="tab-list"] button[data-baseweb="tab"][aria-selected="true"] {
-        background-color: #667eea !important;
-        color: white !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -124,20 +103,10 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     password TEXT NOT NULL,
-    admin BOOLEAN NULL
+    is_admin BOOLEAN DEFAULT 0
 )
 ''')
-
-cursor.execute("PRAGMA table_info(users)")
-columns = cursor.fetchall()
-column_names = [column[1] for column in columns]
-
-if 'is_admin' in column_names and 'admin' not in column_names:
-    cursor.execute('ALTER TABLE users RENAME COLUMN is_admin TO admin')
-    conn.commit()
-elif 'admin' not in column_names and 'is_admin' not in column_names:
-    cursor.execute('ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT 0')
-    conn.commit()
+conn.commit()
 
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS query_logs (
@@ -171,7 +140,7 @@ conn.commit()
 # === Functions ===
 def add_user(email, name, password, is_admin=False):
     hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-    cursor.execute('INSERT INTO users (email, name, password, admin) VALUES (?, ?, ?, ?)', 
+    cursor.execute('INSERT INTO users (email, name, password, is_admin) VALUES (?, ?, ?, ?)', 
                    (email, name, hashed_password, is_admin))
     conn.commit()
 
@@ -313,7 +282,7 @@ if "cached_analytics" not in st.session_state:
 # === Header ===
 st.markdown("""
 <div class="main-header">
-    <h1>SQL Optimizer AI</h1>
+    <h1>🚀 SQL Optimizer AI</h1>
     <p>Analyze, optimize, and understand your SQL queries with AI-powered insights</p>
 </div>
 """, unsafe_allow_html=True)
@@ -335,16 +304,18 @@ if not st.session_state.logged_in:
 
             if login_button:
                 user = get_user(email)
-                if user and verify_password(user[2], password):
-                    st.session_state.logged_in = True
-                    st.session_state.user_email = email
-                    if len(user) > 3:
-                        st.session_state.is_admin = bool(user[3]) if user[3] is not None else False
-                    else:
-                        st.session_state.is_admin = False
-                    st.rerun()
+                if not user:
+                    st.error("User not found. Please check your email or register.")
                 else:
-                    st.error("Invalid email or password")
+                    stored_password = user[2]
+                    
+                    if verify_password(stored_password, password):
+                        st.session_state.logged_in = True
+                        st.session_state.user_email = email
+                        st.session_state.is_admin = bool(user[3]) if user[3] is not None else (email in ADMIN_EMAILS)
+                        st.rerun()
+                    else:
+                        st.error("Invalid password")
 
         with auth_tab2:
             with st.form("register_form"):
@@ -357,7 +328,8 @@ if not st.session_state.logged_in:
                 if get_user(new_email):
                     st.error("Email already exists")
                 else:
-                    add_user(new_email, new_name, new_password)
+                    is_admin = new_email in ADMIN_EMAILS
+                    add_user(new_email, new_name, new_password, is_admin)
                     st.success("Account created successfully! Please log in.")
 
         st.markdown("---")
@@ -366,7 +338,7 @@ if not st.session_state.logged_in:
         with col_info1:
             st.markdown("""
             <div class="metric-container">
-                <h4>Analyze</h4>
+                <h4>🔍 Analyze</h4>
                 <p>Get detailed explanations of your SQL queries</p>
             </div>
             """, unsafe_allow_html=True)
@@ -374,7 +346,7 @@ if not st.session_state.logged_in:
         with col_info2:
             st.markdown("""
             <div class="metric-container">
-                <h4>Optimize</h4>
+                <h4>⚡ Optimize</h4>
                 <p>Improve query performance with AI suggestions</p>
             </div>
             """, unsafe_allow_html=True)
@@ -382,7 +354,7 @@ if not st.session_state.logged_in:
         with col_info3:
             st.markdown("""
             <div class="metric-container">
-                <h4>Test</h4>
+                <h4>🧪 Test</h4>
                 <p>Generate test data and validate your queries</p>
             </div>
             """, unsafe_allow_html=True)
@@ -393,36 +365,36 @@ if not st.session_state.logged_in:
 with st.sidebar:
     st.markdown(f"""
     <div class="status-card">
-        <h3>Welcome</h3>
+        <h3>👋 Welcome</h3>
         <p><strong>{st.session_state.user_email}</strong></p>
-        <p>{"Admin Account" if st.session_state.is_admin else "Standard User"}</p>
+        <p>{"🌟 Admin Account" if st.session_state.is_admin else "👤 Standard User"}</p>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("### Navigation")
     
-    if st.button("Home", key="nav_home", use_container_width=True, 
+    if st.button("🏠 Home", key="nav_home", use_container_width=True, 
                  type="primary" if st.session_state.current_page == "Home" else "secondary"):
         st.session_state.current_page = "Home"
         st.rerun()
     
-    if st.button("SQL Optimizer", key="nav_optimizer", use_container_width=True,
+    if st.button("🚀 SQL Optimizer", key="nav_optimizer", use_container_width=True,
                  type="primary" if st.session_state.current_page == "Optimizer" else "secondary"):
         st.session_state.current_page = "Optimizer"
         st.rerun()
     
-    if st.button("Query History", key="nav_history", use_container_width=True,
+    if st.button("📜 Query History", key="nav_history", use_container_width=True,
                  type="primary" if st.session_state.current_page == "History" else "secondary"):
         st.session_state.current_page = "History"
         st.rerun()
     
     if st.session_state.is_admin:
-        if st.button("Analytics", key="nav_analytics", use_container_width=True,
+        if st.button("📊 Analytics", key="nav_analytics", use_container_width=True,
                      type="primary" if st.session_state.current_page == "Analytics" else "secondary"):
             st.session_state.current_page = "Analytics"
             st.rerun()
         
-        if st.button("User Management", key="nav_users", use_container_width=True,
+        if st.button("👥 User Management", key="nav_users", use_container_width=True,
                      type="primary" if st.session_state.current_page == "Users" else "secondary"):
             st.session_state.current_page = "Users"
             st.rerun()
@@ -434,7 +406,7 @@ with st.sidebar:
             st.session_state.query_count = 0
             st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
         
-        st.markdown("### Usage")
+        st.markdown("### 📈 Usage")
         progress = st.session_state.query_count / 5
         st.progress(progress)
         st.markdown(f"**{st.session_state.query_count}/5** queries used today")
@@ -447,13 +419,13 @@ with st.sidebar:
         if st.session_state.query_count >= 5:
             st.error("Daily limit reached")
     else:
-        st.markdown("### Usage")
-        st.success("Unlimited queries")
+        st.markdown("### 📈 Usage")
+        st.success("✨ Unlimited queries")
     
     st.markdown("---")
     
-    st.markdown("### Settings")
-    if st.button("Logout", use_container_width=True, type="secondary"):
+    st.markdown("### ⚙️ Settings")
+    if st.button("🚪 Logout", use_container_width=True, type="secondary"):
         st.session_state.logged_in = False
         st.session_state.user_email = None
         st.session_state.is_admin = False
@@ -465,21 +437,21 @@ if st.session_state.current_page == "Home":
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        st.markdown("## Quick Start")
+        st.markdown("## 🚀 Quick Start")
         
         col_action1, col_action2 = st.columns(2)
         
         with col_action1:
-            if st.button("Start Analyzing SQL", use_container_width=True, type="primary"):
+            if st.button("🔍 Start Analyzing SQL", use_container_width=True, type="primary"):
                 st.session_state.current_page = "Optimizer"
                 st.rerun()
         
         with col_action2:
-            if st.session_state.is_admin and st.button("View Analytics", use_container_width=True):
+            if st.session_state.is_admin and st.button("📊 View Analytics", use_container_width=True):
                 st.session_state.current_page = "Analytics"
                 st.rerun()
         
-        st.markdown("## Recent Activity")
+        st.markdown("## 📌 Recent Activity")
         cursor.execute('SELECT task_type, timestamp FROM query_logs WHERE user_email = ? ORDER BY timestamp DESC LIMIT 5',
                        (st.session_state.user_email,))
         recent_activity = cursor.fetchall()
@@ -492,7 +464,7 @@ if st.session_state.current_page == "Home":
             st.info("No recent activity. Start by analyzing your first SQL query!")
     
     with col2:
-        st.markdown("## Your Stats")
+        st.markdown("## 📈 Your Stats")
         
         cursor.execute('SELECT COUNT(*) FROM query_logs WHERE user_email = ?', (st.session_state.user_email,))
         user_queries = cursor.fetchone()[0]
@@ -509,7 +481,7 @@ if st.session_state.current_page == "Home":
             st.metric("Daily Remaining", 5 - st.session_state.query_count)
 
 elif st.session_state.current_page == "Optimizer":
-    st.markdown("## SQL Query Optimizer")
+    st.markdown("## 🚀 SQL Query Optimizer")
     
     st.markdown('<div class="query-container">', unsafe_allow_html=True)
     
@@ -537,64 +509,6 @@ elif st.session_state.current_page == "Optimizer":
         
         if sql_query != st.session_state.current_sql_query:
             st.session_state.current_sql_query = sql_query
-        
-        st.components.v1.html("""
-        <script>
-        function enableTabs() {
-            const textarea = parent.document.querySelector('textarea[aria-label="SQL Query"]');
-            if (textarea) {
-                textarea.addEventListener('keydown', function(e) {
-                    if (e.key === 'Tab') {
-                        e.preventDefault();
-                        const start = this.selectionStart;
-                        const end = this.selectionEnd;
-                        const value = this.value;
-                        
-                        if (e.shiftKey) {
-                            const beforeSelection = value.substring(0, start);
-                            const firstLineStart = beforeSelection.lastIndexOf('\\n') + 1;
-                            const textBeforeFirstLine = value.substring(0, firstLineStart);
-                            const selectedWithFirstLine = value.substring(firstLineStart, end);
-                            const unindentedText = selectedWithFirstLine.replace(/^(    |\\t)/gm, '');
-                            const removedChars = selectedWithFirstLine.length - unindentedText.length;
-                            
-                            this.value = textBeforeFirstLine + unindentedText + value.substring(end);
-                            this.selectionStart = Math.max(firstLineStart, start - Math.min(4, removedChars));
-                            this.selectionEnd = Math.max(this.selectionStart, end - removedChars);
-                        } else {
-                            if (start === end) {
-                                this.value = value.substring(0, start) + '    ' + value.substring(end);
-                                this.selectionStart = this.selectionEnd = start + 4;
-                            } else {
-                                const beforeSelection = value.substring(0, start);
-                                const firstLineStart = beforeSelection.lastIndexOf('\\n') + 1;
-                                const textBeforeFirstLine = value.substring(0, firstLineStart);
-                                const selectedWithFirstLine = value.substring(firstLineStart, end);
-                                const indentedText = selectedWithFirstLine.replace(/^/gm, '    ');
-                                const addedChars = indentedText.length - selectedWithFirstLine.length;
-                                
-                                this.value = textBeforeFirstLine + indentedText + value.substring(end);
-                                this.selectionStart = start + 4;
-                                this.selectionEnd = end + addedChars;
-                            }
-                        }
-                        this.dispatchEvent(new Event('input', { bubbles: true }));
-                    }
-                });
-                return true;
-            }
-            return false;
-        }
-        
-        let attempts = 0;
-        function tryEnable() {
-            if (enableTabs()) return;
-            attempts++;
-            if (attempts < 20) setTimeout(tryEnable, 200);
-        }
-        tryEnable();
-        </script>
-        """, height=0)
     
     with col2:
         task = st.selectbox("Analysis Type", ["Explain", "Optimize", "Detect Issues", "Test"])
@@ -617,7 +531,7 @@ elif st.session_state.current_page == "Optimizer":
             else:
                 st.warning("Please enter SQL code to format")
         
-        analyze_button = st.button("Analyze Query", use_container_width=True, type="primary",
+        analyze_button = st.button("🔍 Analyze Query", use_container_width=True, type="primary",
                                   disabled=(not st.session_state.is_admin and st.session_state.query_count >= 5))
     
     st.markdown("</div>", unsafe_allow_html=True)
@@ -641,151 +555,51 @@ elif st.session_state.current_page == "Optimizer":
                 return len(enc.encode(text))
             
             prompt_templates = {
-                "Explain": f"""You are a senior database architect with 15+ years of experience across multiple database systems.
+                "Explain": f"""Provide a comprehensive analysis of this SQL query.
 
-Your task is to provide a comprehensive analysis of the following SQL query for a database professional.
-
-Please structure your response as follows:
-
-1. QUERY PURPOSE
-   - What business problem this query solves
-   - Expected output and use case
-
-2. EXECUTION BREAKDOWN
-   - Step-by-step execution order with explanations
-   - How the query engine processes each clause
-   - Data flow between operations
-
-3. TECHNICAL ANALYSIS
-   - Table relationships and join types
-   - Filtering and aggregation logic
-   - Potential index usage patterns
-
-4. PERFORMANCE CONSIDERATIONS
-   - Query complexity assessment
-   - Likely bottlenecks or expensive operations
-   - Scalability implications
-
+Structure your response:
+1. QUERY PURPOSE - What problem it solves
+2. EXECUTION BREAKDOWN - Step-by-step processing
+3. TECHNICAL ANALYSIS - Table relationships and logic
+4. PERFORMANCE CONSIDERATIONS - Bottlenecks and scalability
 5. ASSUMPTIONS & DEPENDENCIES
-   - Required table structures
-   - Data distribution assumptions
-   - Missing context that might affect analysis
-
-Provide specific, actionable insights rather than generic explanations. Use technical terminology appropriately.
 
 SQL Query:
 {sql_query}""",
 
-                "Detect Issues": f"""You are a senior database performance consultant specializing in SQL code review and optimization.
+                "Detect Issues": f"""Analyze this query for issues.
 
-Analyze the following query and identify issues across these categories:
-
-1. PERFORMANCE ISSUES
-   - Inefficient joins or subqueries
-   - Missing or misused indexes
-   - Unnecessary data processing
-   - Scalability concerns
-
-2. SECURITY VULNERABILITIES
-   - SQL injection risks
-   - Excessive permissions required
-   - Data exposure concerns
-
-3. MAINTAINABILITY PROBLEMS
-   - Code readability issues
-   - Hard-coded values
-   - Complex logic that could be simplified
-   - Missing documentation needs
-
+Check for:
+1. PERFORMANCE ISSUES - Inefficiencies
+2. SECURITY VULNERABILITIES - Injection risks
+3. MAINTAINABILITY PROBLEMS - Readability issues
 4. BEST PRACTICE VIOLATIONS
-   - SQL standard deviations
-   - Database-specific anti-patterns
-   - Naming convention issues
-   - Resource management concerns
 
-For each issue identified:
-- Rate severity: CRITICAL, HIGH, MEDIUM, LOW
-- Explain the potential impact
-- Provide specific remediation steps
-- Suggest alternative approaches where applicable
-
-If no issues are found, explain why the query follows good practices.
+Rate severity: CRITICAL, HIGH, MEDIUM, LOW
 
 SQL Query:
 {sql_query}""",
 
-                "Optimize": f"""You are a database performance specialist with expertise in query optimization across multiple database platforms.
+                "Optimize": f"""Optimize this SQL query for better performance.
 
-Your task is to optimize the following SQL query for better performance.
-
-Please provide:
-
+Provide:
 1. PERFORMANCE ANALYSIS
-   - Current query execution approach
-   - Identify performance bottlenecks
-   - Estimated relative cost of each operation
-
 2. OPTIMIZATION STRATEGY
-   - Primary optimization opportunities
-   - Index recommendations (existing and new)
-   - Query structure improvements
-   - Alternative algorithmic approaches
-
 3. OPTIMIZED VERSION
-   - Rewritten query with improvements
-   - Explanation of each change made
-   - Expected performance impact
-
 4. IMPLEMENTATION NOTES
-   - Database-specific considerations
-   - Index creation statements if needed
-   - Testing recommendations
-   - Monitoring suggestions
-
 5. TRADE-OFF ANALYSIS
-   - Performance vs readability
-   - Memory vs CPU usage
-   - Optimization maintenance overhead
-
-Assume a medium-to-large dataset unless obvious otherwise. Focus on scalable solutions.
 
 Original SQL Query:
 {sql_query}""",
 
-                "Test": f"""You are a database testing specialist responsible for comprehensive SQL query validation.
+                "Test": f"""Create a test suite for this query.
 
-Create a complete test suite for the following query:
-
-1. TEST DATA DESIGN
-   - Generate 5-8 rows of realistic sample data for each table
-   - Include edge cases: nulls, empty strings, boundary values
-   - Represent different data scenarios (high/low volumes, various patterns)
-
-2. EXPECTED RESULTS
-   - Show the complete expected output for your test data
-   - Explain the logic for each result row
-   - Highlight any complex calculations or transformations
-
+Include:
+1. TEST DATA DESIGN - Sample data with edge cases
+2. EXPECTED RESULTS - Complete output
 3. EDGE CASE SCENARIOS
-   - Empty table conditions
-   - Single row scenarios  
-   - Null value handling
-   - Data type boundary conditions
-   - Large dataset implications
-
 4. VALIDATION CRITERIA
-   - Data accuracy checks
-   - Performance benchmarks
-   - Resource usage expectations
-   - Error condition handling
-
 5. TEST EXECUTION PLAN
-   - Step-by-step testing approach
-   - Required test environment setup
-   - Success/failure criteria
-   - Regression testing considerations
-
-Format the test data as proper INSERT statements and expected results as formatted tables.
 
 SQL Query to Test:
 {sql_query}"""
@@ -810,7 +624,7 @@ SQL Query to Test:
                     try:
                         history_id = save_query_to_history(user_email=st.session_state.user_email, 
                                                          query_text=sql_query, task_type=task, result_text=reply)
-                        st.success(f"Analysis complete! (Saved to history: ID {history_id})")
+                        st.success(f"✅ Analysis complete! (Saved to history: ID {history_id})")
                     except Exception as history_error:
                         st.error(f"Analysis complete but failed to save to history: {str(history_error)}")
                         history_id = None
@@ -843,7 +657,7 @@ SQL Query to Test:
                     with col_info2:
                         st.caption(f"Model: {model}")
                     with col_info3:
-                        st.download_button("Download Results", reply, file_name=f"sql_analysis_{task.lower()}.txt")
+                        st.download_button("📥 Download Results", reply, file_name=f"sql_analysis_{task.lower()}.txt")
                     
                 except Exception as e:
                     log_query(user_email=st.session_state.user_email, task_type=task, 
@@ -851,36 +665,7 @@ SQL Query to Test:
                     st.error(f"Error: {str(e)}")
 
 elif st.session_state.current_page == "History":
-    st.markdown("## Query History")
-    
-    with st.expander("Debug Info"):
-        st.write(f"Current user: {st.session_state.user_email}")
-        
-        cursor.execute('SELECT COUNT(*) FROM query_history WHERE user_email = ?', (st.session_state.user_email,))
-        total_queries = cursor.fetchone()[0]
-        st.write(f"Total queries in history: {total_queries}")
-        
-        cursor.execute('SELECT COUNT(*) FROM query_history')
-        all_queries = cursor.fetchone()[0] 
-        st.write(f"Total queries in database (all users): {all_queries}")
-        
-        cursor.execute('SELECT id, query_text, task_type, timestamp FROM query_history WHERE user_email = ? ORDER BY timestamp DESC LIMIT 3', 
-                       (st.session_state.user_email,))
-        recent_entries = cursor.fetchall()
-        if recent_entries:
-            st.write("Your recent entries:")
-            for entry in recent_entries:
-                st.write(f"ID: {entry[0]}, Task: {entry[2]}, Time: {entry[3]}")
-                st.write(f"Query snippet: {entry[1][:50]}...")
-        else:
-            st.write("No entries found for your account")
-            
-        cursor.execute('SELECT user_email, task_type, timestamp FROM query_history ORDER BY timestamp DESC LIMIT 5')
-        all_recent = cursor.fetchall()
-        if all_recent:
-            st.write("Recent entries (all users):")
-            for entry in all_recent:
-                st.write(f"User: {entry[0]}, Task: {entry[1]}, Time: {entry[2]}")
+    st.markdown("## 📜 Query History")
     
     history = get_user_query_history(st.session_state.user_email)
     favorites = get_user_favorites(st.session_state.user_email)
@@ -1009,12 +794,12 @@ elif st.session_state.current_page == "History":
             st.info("No favorite queries yet. Star some queries from your history to see them here!")
 
 elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
-    st.markdown("## Analytics Dashboard")
+    st.markdown("## 📊 Analytics Dashboard")
     
     col_refresh1, col_refresh2, col_refresh3, col_refresh4 = st.columns([1, 1, 1, 2])
     
     with col_refresh1:
-        manual_refresh = st.button("Refresh", use_container_width=True)
+        manual_refresh = st.button("🔄 Refresh", use_container_width=True)
     
     with col_refresh2:
         auto_refresh = st.toggle("Auto-refresh")
@@ -1030,7 +815,7 @@ elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
             age_seconds = (datetime.now() - last_update).total_seconds()
             
             if is_fresh:
-                st.success(f"Just updated!")
+                st.success(f"✅ Just updated!")
             elif age_seconds < 60:
                 st.info(f"Updated {int(age_seconds)}s ago")
             else:
@@ -1125,18 +910,18 @@ elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
             st.success("No recent errors!")
 
 elif st.session_state.current_page == "Users" and st.session_state.is_admin:
-    st.markdown("## User Management")
+    st.markdown("## 👥 User Management")
     
     tab1, tab2, tab3 = st.tabs(["All Users", "Manage Users", "User Analytics"])
     
     with tab1:
         st.markdown("#### All Registered Users")
-        cursor.execute('SELECT email, name, admin FROM users')
+        cursor.execute('SELECT email, name, is_admin FROM users')
         users = cursor.fetchall()
         
         if users:
             df = pd.DataFrame(users, columns=['Email', 'Name', 'Admin Status'])
-            df['Admin Status'] = df['Admin Status'].map({1: 'Admin', 0: 'User', None: 'User'})
+            df['Admin Status'] = df['Admin Status'].map({1: '🌟 Admin', 0: '👤 User', None: '👤 User'})
             st.dataframe(df, use_container_width=True)
             st.caption(f"Total users: {len(users)}")
         else:
@@ -1147,7 +932,7 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
         
         with col_manage1:
             st.markdown("#### Grant Admin Access")
-            cursor.execute('SELECT email, name FROM users WHERE admin = 0 OR admin IS NULL')
+            cursor.execute('SELECT email, name FROM users WHERE is_admin = 0 OR is_admin IS NULL')
             regular_users = cursor.fetchall()
             
             if regular_users:
@@ -1157,12 +942,35 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
                 selected_email = regular_users[selected_user_idx][0]
                 
                 if st.button("Grant Admin Access", use_container_width=True, type="primary"):
-                    cursor.execute('UPDATE users SET admin = 1 WHERE email = ?', (selected_email,))
+                    cursor.execute('UPDATE users SET is_admin = 1 WHERE email = ?', (selected_email,))
                     conn.commit()
-                    st.success(f"{selected_email} is now an admin!")
+                    st.success(f"✅ {selected_email} is now an admin!")
                     st.rerun()
             else:
                 st.info("All users are already admins")
+            
+            # Password Reset Tool
+            st.markdown("#### Reset User Password")
+            cursor.execute('SELECT email, name FROM users')
+            all_users_reset = cursor.fetchall()
+            
+            if all_users_reset:
+                user_options_reset = [f"{user[1]} ({user[0]})" for user in all_users_reset]
+                selected_user_reset_idx = st.selectbox("Select user to reset password:", range(len(user_options_reset)), 
+                                                      format_func=lambda x: user_options_reset[x], key="reset_user")
+                selected_email_reset = all_users_reset[selected_user_reset_idx][0]
+                
+                new_password = st.text_input("New password:", type="password", key="new_password")
+                
+                if st.button("Reset Password", use_container_width=True, type="secondary"):
+                    if new_password.strip():
+                        # Hash the new password
+                        hashed_password = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+                        cursor.execute('UPDATE users SET password = ? WHERE email = ?', (hashed_password, selected_email_reset))
+                        conn.commit()
+                        st.success(f"✅ Password reset for {selected_email_reset}!")
+                    else:
+                        st.error("Please enter a new password")
         
         with col_manage2:
             st.markdown("#### Remove User")
@@ -1226,7 +1034,5 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; padding: 2rem 0;">
-    <p>SQL Optimizer AI - Powered by GPT-4o Mini</p>
-    <p>Built with Streamlit</p>
 </div>
 """, unsafe_allow_html=True)
