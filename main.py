@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     password TEXT NOT NULL,
-    is_admin BOOLEAN DEFAULT 0
+    admin BOOLEAN DEFAULT 0
 )
 ''')
 conn.commit()
@@ -140,7 +140,7 @@ conn.commit()
 # === Functions ===
 def add_user(email, name, password, is_admin=False):
     hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-    cursor.execute('INSERT INTO users (email, name, password, is_admin) VALUES (?, ?, ?, ?)', 
+    cursor.execute('INSERT INTO users (email, name, password, admin) VALUES (?, ?, ?, ?)', 
                    (email, name, hashed_password, is_admin))
     conn.commit()
 
@@ -917,7 +917,7 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
     
     with tab1:
         st.markdown("#### All Registered Users")
-        cursor.execute('SELECT email, name, is_admin FROM users')
+        cursor.execute('SELECT email, name, admin FROM users')
         users = cursor.fetchall()
         
         if users:
@@ -933,7 +933,7 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
         
         with col_manage1:
             st.markdown("#### Grant Admin Access")
-            cursor.execute('SELECT email, name FROM users WHERE is_admin = 0 OR is_admin IS NULL')
+            cursor.execute('SELECT email, name FROM users WHERE admin = 0 OR admin IS NULL')
             regular_users = cursor.fetchall()
             
             if regular_users:
@@ -943,7 +943,7 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
                 selected_email = regular_users[selected_user_idx][0]
                 
                 if st.button("Grant Admin Access", use_container_width=True, type="primary"):
-                    cursor.execute('UPDATE users SET is_admin = 1 WHERE email = ?', (selected_email,))
+                    cursor.execute('UPDATE users SET admin = 1 WHERE email = ?', (selected_email,))
                     conn.commit()
                     st.success(f"{selected_email} is now an admin!")
                     st.rerun()
