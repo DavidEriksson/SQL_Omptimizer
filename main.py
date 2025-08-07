@@ -30,8 +30,9 @@ def add_user(email, name, password, is_admin=False):
     return result
 
 def get_user(email):
-    result = supabase.table("users").select("*").eq("email", email).single().execute()
-    return result.data if result.data else None
+    result = supabase.table("users").select("*").eq("email", email).execute()
+    rows = result.data
+    return rows[0] if rows else None
 
 def verify_password(stored_password, provided_password):
     return bcrypt.checkpw(provided_password.encode(), stored_password.encode())
@@ -71,8 +72,11 @@ def get_user_favorites(user_email):
     return result.data if result.data else []
 
 def toggle_favorite(query_id):
-    current = supabase.table("query_history").select("is_favorite").eq("id", query_id).single().execute()
-    new_status = not current.data["is_favorite"]
+    current = supabase.table("query_history").select("is_favorite").eq("id", query_id).execute()
+    rows = current.data
+    if not rows:
+        return False
+    new_status = not rows[0]["is_favorite"]
     supabase.table("query_history").update({"is_favorite": new_status}).eq("id", query_id).execute()
     return new_status
 
