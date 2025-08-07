@@ -6,11 +6,11 @@ from config import init_page_config, apply_custom_css
 from database import *
 from auth import login_page
 from components.sidebar import render_sidebar
-from pages.home import home_page
-from pages.optimizer import optimizer_page
-from pages.history import history_page
-from pages.analytics import analytics_page
-from pages.users import users_page
+from views.home import home_page
+from views.optimizer import optimizer_page
+from views.history import history_page
+from views.analytics import analytics_page
+from views.users import users_page
 
 # === Page Configuration ===
 init_page_config()
