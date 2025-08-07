@@ -1,14 +1,19 @@
 import streamlit as st
 from datetime import datetime, timedelta
+from database import get_user
 
 def render_sidebar():
     """Render the sidebar navigation and user info"""
     with st.sidebar:
+        # Get user's name
+        user = get_user(st.session_state.user_email)
+        user_name = user['name'] if user else st.session_state.user_email
+        
         # User status card
         st.markdown(f"""
         <div class="status-card">
             <h3>Welcome</h3>
-            <p><strong>{st.session_state.user_email}</strong></p>
+            <p><strong>{user_name}</strong></p>
             <p>{"Admin Account" if st.session_state.is_admin else "Standard User"}</p>
         </div>
         """, unsafe_allow_html=True)
