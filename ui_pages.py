@@ -87,8 +87,8 @@ def run_query_analysis(supabase, sql_query, task):
         st.error(f"Failed: {e}")
 
 def display_query_history(supabase, user_email):
-    history = get_user_query_history(supabase, user_email)
-    favorites = get_user_favorites(supabase, user_email)
+    history = get_user_query_history(supabase, user_email) or []
+    favorites = get_user_favorites(supabase, user_email) or []
 
     tab1, tab2 = st.tabs(["Recent", "Favorites"])
 
@@ -98,7 +98,14 @@ def display_query_history(supabase, user_email):
             return
 
         for q in history:
-            query_id, query_text, task_type, result_text, is_fav, name, timestamp = q.values()
+            query_id = q.get("id")
+            query_text = q.get("query_text")
+            task_type = q.get("task_type")
+            result_text = q.get("result_text")
+            is_fav = q.get("is_favorite", False)
+            name = q.get("query_name")
+            timestamp = q.get("timestamp")
+
             with st.expander(f"{name or task_type} - {timestamp[:16]}"):
                 st.code(query_text)
                 if result_text:
@@ -125,7 +132,13 @@ def display_query_history(supabase, user_email):
             return
 
         for q in favorites:
-            query_id, query_text, task_type, result_text, name, timestamp = q.values()
+            query_id = q.get("id")
+            query_text = q.get("query_text")
+            task_type = q.get("task_type")
+            result_text = q.get("result_text")
+            name = q.get("query_name")
+            timestamp = q.get("timestamp")
+
             with st.expander(f"⭐ {name or task_type} - {timestamp[:16]}"):
                 st.code(query_text)
                 if result_text:
