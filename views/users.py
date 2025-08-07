@@ -33,7 +33,7 @@ def display_all_users():
     
     if users:
         df = pd.DataFrame(users)
-        df['is_admin'] = df['is_admin'].map({True: 'Admin', False: 'User', None: 'User'})
+        df['admin'] = df['admin'].map({True: 'Admin', False: 'User', None: 'User'})
         df.columns = ['Email', 'Name', 'Admin Status']
         st.dataframe(df, use_container_width=True)
         st.caption(f"Total users: {len(users)}")
