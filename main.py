@@ -14,7 +14,7 @@ ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]
 # === Page Configuration ===
 st.set_page_config(
     page_title="SQL Optimizer AI",
-    page_icon="🚀",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -282,7 +282,7 @@ if "cached_analytics" not in st.session_state:
 # === Header ===
 st.markdown("""
 <div class="main-header">
-    <h1>🚀 SQL Optimizer AI</h1>
+    <h1>SQL Optimizer AI</h1>
     <p>Analyze, optimize, and understand your SQL queries with AI-powered insights</p>
 </div>
 """, unsafe_allow_html=True)
@@ -338,7 +338,7 @@ if not st.session_state.logged_in:
         with col_info1:
             st.markdown("""
             <div class="metric-container">
-                <h4>🔍 Analyze</h4>
+                <h4>Analyze</h4>
                 <p>Get detailed explanations of your SQL queries</p>
             </div>
             """, unsafe_allow_html=True)
@@ -346,7 +346,7 @@ if not st.session_state.logged_in:
         with col_info2:
             st.markdown("""
             <div class="metric-container">
-                <h4>⚡ Optimize</h4>
+                <h4>Optimize</h4>
                 <p>Improve query performance with AI suggestions</p>
             </div>
             """, unsafe_allow_html=True)
@@ -354,7 +354,7 @@ if not st.session_state.logged_in:
         with col_info3:
             st.markdown("""
             <div class="metric-container">
-                <h4>🧪 Test</h4>
+                <h4>Test</h4>
                 <p>Generate test data and validate your queries</p>
             </div>
             """, unsafe_allow_html=True)
@@ -365,36 +365,36 @@ if not st.session_state.logged_in:
 with st.sidebar:
     st.markdown(f"""
     <div class="status-card">
-        <h3>👋 Welcome</h3>
+        <h3>Welcome</h3>
         <p><strong>{st.session_state.user_email}</strong></p>
-        <p>{"🌟 Admin Account" if st.session_state.is_admin else "👤 Standard User"}</p>
+        <p>{"Admin Account" if st.session_state.is_admin else "Standard User"}</p>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("### Navigation")
     
-    if st.button("🏠 Home", key="nav_home", use_container_width=True, 
+    if st.button("Home", key="nav_home", use_container_width=True, 
                  type="primary" if st.session_state.current_page == "Home" else "secondary"):
         st.session_state.current_page = "Home"
         st.rerun()
     
-    if st.button("🚀 SQL Optimizer", key="nav_optimizer", use_container_width=True,
+    if st.button("SQL Optimizer", key="nav_optimizer", use_container_width=True,
                  type="primary" if st.session_state.current_page == "Optimizer" else "secondary"):
         st.session_state.current_page = "Optimizer"
         st.rerun()
     
-    if st.button("📜 Query History", key="nav_history", use_container_width=True,
+    if st.button("Query History", key="nav_history", use_container_width=True,
                  type="primary" if st.session_state.current_page == "History" else "secondary"):
         st.session_state.current_page = "History"
         st.rerun()
     
     if st.session_state.is_admin:
-        if st.button("📊 Analytics", key="nav_analytics", use_container_width=True,
+        if st.button("Analytics", key="nav_analytics", use_container_width=True,
                      type="primary" if st.session_state.current_page == "Analytics" else "secondary"):
             st.session_state.current_page = "Analytics"
             st.rerun()
         
-        if st.button("👥 User Management", key="nav_users", use_container_width=True,
+        if st.button("User Management", key="nav_users", use_container_width=True,
                      type="primary" if st.session_state.current_page == "Users" else "secondary"):
             st.session_state.current_page = "Users"
             st.rerun()
@@ -406,7 +406,7 @@ with st.sidebar:
             st.session_state.query_count = 0
             st.session_state.query_reset_time = datetime.now() + timedelta(hours=24)
         
-        st.markdown("### 📈 Usage")
+        st.markdown("### Usage")
         progress = st.session_state.query_count / 5
         st.progress(progress)
         st.markdown(f"**{st.session_state.query_count}/5** queries used today")
@@ -419,13 +419,13 @@ with st.sidebar:
         if st.session_state.query_count >= 5:
             st.error("Daily limit reached")
     else:
-        st.markdown("### 📈 Usage")
-        st.success("✨ Unlimited queries")
+        st.markdown("### Usage")
+        st.success("Unlimited queries")
     
     st.markdown("---")
     
-    st.markdown("### ⚙️ Settings")
-    if st.button("🚪 Logout", use_container_width=True, type="secondary"):
+    st.markdown("### Settings")
+    if st.button("Logout", use_container_width=True, type="secondary"):
         st.session_state.logged_in = False
         st.session_state.user_email = None
         st.session_state.is_admin = False
@@ -437,21 +437,21 @@ if st.session_state.current_page == "Home":
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        st.markdown("## 🚀 Quick Start")
+        st.markdown("## Quick Start")
         
         col_action1, col_action2 = st.columns(2)
         
         with col_action1:
-            if st.button("🔍 Start Analyzing SQL", use_container_width=True, type="primary"):
+            if st.button("Start Analyzing SQL", use_container_width=True, type="primary"):
                 st.session_state.current_page = "Optimizer"
                 st.rerun()
         
         with col_action2:
-            if st.session_state.is_admin and st.button("📊 View Analytics", use_container_width=True):
+            if st.session_state.is_admin and st.button("View Analytics", use_container_width=True):
                 st.session_state.current_page = "Analytics"
                 st.rerun()
         
-        st.markdown("## 📌 Recent Activity")
+        st.markdown("## Recent Activity")
         cursor.execute('SELECT task_type, timestamp FROM query_logs WHERE user_email = ? ORDER BY timestamp DESC LIMIT 5',
                        (st.session_state.user_email,))
         recent_activity = cursor.fetchall()
@@ -464,7 +464,7 @@ if st.session_state.current_page == "Home":
             st.info("No recent activity. Start by analyzing your first SQL query!")
     
     with col2:
-        st.markdown("## 📈 Your Stats")
+        st.markdown("## Your Stats")
         
         cursor.execute('SELECT COUNT(*) FROM query_logs WHERE user_email = ?', (st.session_state.user_email,))
         user_queries = cursor.fetchone()[0]
@@ -481,7 +481,7 @@ if st.session_state.current_page == "Home":
             st.metric("Daily Remaining", 5 - st.session_state.query_count)
 
 elif st.session_state.current_page == "Optimizer":
-    st.markdown("## 🚀 SQL Query Optimizer")
+    st.markdown("## SQL Query Optimizer")
     
     st.markdown('<div class="query-container">', unsafe_allow_html=True)
     
@@ -531,7 +531,7 @@ elif st.session_state.current_page == "Optimizer":
             else:
                 st.warning("Please enter SQL code to format")
         
-        analyze_button = st.button("🔍 Analyze Query", use_container_width=True, type="primary",
+        analyze_button = st.button("Analyze Query", use_container_width=True, type="primary",
                                   disabled=(not st.session_state.is_admin and st.session_state.query_count >= 5))
     
     st.markdown("</div>", unsafe_allow_html=True)
@@ -624,7 +624,7 @@ SQL Query to Test:
                     try:
                         history_id = save_query_to_history(user_email=st.session_state.user_email, 
                                                          query_text=sql_query, task_type=task, result_text=reply)
-                        st.success(f"✅ Analysis complete! (Saved to history: ID {history_id})")
+                        st.success(f"Analysis complete! (Saved to history: ID {history_id})")
                     except Exception as history_error:
                         st.error(f"Analysis complete but failed to save to history: {str(history_error)}")
                         history_id = None
@@ -657,7 +657,7 @@ SQL Query to Test:
                     with col_info2:
                         st.caption(f"Model: {model}")
                     with col_info3:
-                        st.download_button("📥 Download Results", reply, file_name=f"sql_analysis_{task.lower()}.txt")
+                        st.download_button("Download Results", reply, file_name=f"sql_analysis_{task.lower()}.txt")
                     
                 except Exception as e:
                     log_query(user_email=st.session_state.user_email, task_type=task, 
@@ -665,7 +665,7 @@ SQL Query to Test:
                     st.error(f"Error: {str(e)}")
 
 elif st.session_state.current_page == "History":
-    st.markdown("## 📜 Query History")
+    st.markdown("## Query History")
     
     history = get_user_query_history(st.session_state.user_email)
     favorites = get_user_favorites(st.session_state.user_email)
@@ -703,8 +703,9 @@ elif st.session_state.current_page == "History":
                 for item in filtered_history:
                     query_id, query_text, task_type, result_text, is_favorite, query_name, timestamp = item
                     
+                    star_mark = "[Favorite] " if is_favorite else ""
                     display_name = query_name if query_name else f"{task_type} - {timestamp[:10]}"
-                    with st.expander(f"{'⭐ ' if is_favorite else ''}{display_name}", expanded=False):
+                    with st.expander(f"{star_mark}{display_name}", expanded=False):
                         
                         col_details1, col_details2, col_details3 = st.columns([2, 1, 1])
                         with col_details1:
@@ -756,7 +757,7 @@ elif st.session_state.current_page == "History":
                 query_id, query_text, task_type, result_text, query_name, timestamp = item
                 
                 display_name = query_name if query_name else f"{task_type} - {timestamp[:10]}"
-                with st.expander(f"⭐ {display_name}", expanded=False):
+                with st.expander(f"[Favorite] {display_name}", expanded=False):
                     
                     col_fav1, col_fav2 = st.columns([3, 1])
                     with col_fav1:
@@ -794,12 +795,12 @@ elif st.session_state.current_page == "History":
             st.info("No favorite queries yet. Star some queries from your history to see them here!")
 
 elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
-    st.markdown("## 📊 Analytics Dashboard")
+    st.markdown("## Analytics Dashboard")
     
     col_refresh1, col_refresh2, col_refresh3, col_refresh4 = st.columns([1, 1, 1, 2])
     
     with col_refresh1:
-        manual_refresh = st.button("🔄 Refresh", use_container_width=True)
+        manual_refresh = st.button("Refresh", use_container_width=True)
     
     with col_refresh2:
         auto_refresh = st.toggle("Auto-refresh")
@@ -815,7 +816,7 @@ elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
             age_seconds = (datetime.now() - last_update).total_seconds()
             
             if is_fresh:
-                st.success(f"✅ Just updated!")
+                st.success(f"Just updated!")
             elif age_seconds < 60:
                 st.info(f"Updated {int(age_seconds)}s ago")
             else:
@@ -910,7 +911,7 @@ elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
             st.success("No recent errors!")
 
 elif st.session_state.current_page == "Users" and st.session_state.is_admin:
-    st.markdown("## 👥 User Management")
+    st.markdown("## User Management")
     
     tab1, tab2, tab3 = st.tabs(["All Users", "Manage Users", "User Analytics"])
     
@@ -921,7 +922,7 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
         
         if users:
             df = pd.DataFrame(users, columns=['Email', 'Name', 'Admin Status'])
-            df['Admin Status'] = df['Admin Status'].map({1: '🌟 Admin', 0: '👤 User', None: '👤 User'})
+            df['Admin Status'] = df['Admin Status'].map({1: 'Admin', 0: 'User', None: 'User'})
             st.dataframe(df, use_container_width=True)
             st.caption(f"Total users: {len(users)}")
         else:
@@ -944,7 +945,7 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
                 if st.button("Grant Admin Access", use_container_width=True, type="primary"):
                     cursor.execute('UPDATE users SET is_admin = 1 WHERE email = ?', (selected_email,))
                     conn.commit()
-                    st.success(f"✅ {selected_email} is now an admin!")
+                    st.success(f"{selected_email} is now an admin!")
                     st.rerun()
             else:
                 st.info("All users are already admins")
@@ -968,7 +969,7 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
                         hashed_password = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
                         cursor.execute('UPDATE users SET password = ? WHERE email = ?', (hashed_password, selected_email_reset))
                         conn.commit()
-                        st.success(f"✅ Password reset for {selected_email_reset}!")
+                        st.success(f"Password reset for {selected_email_reset}!")
                     else:
                         st.error("Please enter a new password")
         
@@ -1034,5 +1035,7 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; padding: 2rem 0;">
+    <p>SQL Optimizer AI - Powered by GPT-4o Mini</p>
+    <p>Built with Streamlit</p>
 </div>
 """, unsafe_allow_html=True)
