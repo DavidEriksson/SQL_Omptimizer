@@ -388,7 +388,7 @@ def show_example_questions(schema):
             "Show records that meet multiple conditions"
         ]
     
-    with st.expander("💡 Example Questions"):
+    with st.expander("Example Questions"):
         st.markdown("Try these example questions:")
         for example in examples:
             if st.button(example, key=f"example_{example}", use_container_width=True):
