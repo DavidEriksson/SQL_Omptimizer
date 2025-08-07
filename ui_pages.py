@@ -4,7 +4,7 @@ import openai
 import pandas as pd
 from datetime import datetime
 
-from utils import format_sql, estimate_tokens
+from utils import format_sql, estimate_tokens, init_session_state
 from database import (
     log_query, save_query_to_history,
     get_user_query_history, get_user_favorites,
@@ -14,6 +14,8 @@ from database import (
 from constants import TASK_DESCRIPTIONS, PROMPT_TEMPLATES
 
 def render_ui(supabase):
+    init_session_state()  # 🛠️ Initierar session state vid behov
+
     user_email = st.session_state.user_email
     is_admin = st.session_state.is_admin
 
