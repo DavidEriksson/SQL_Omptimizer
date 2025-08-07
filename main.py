@@ -115,7 +115,7 @@ def create_tables():
         email TEXT UNIQUE NOT NULL,
         name TEXT NOT NULL,
         password TEXT NOT NULL,
-        is_admin BOOLEAN DEFAULT FALSE,
+        admin BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
     
@@ -151,7 +151,7 @@ def add_user(email, name, password, is_admin=False):
             "email": email,
             "name": name,
             "password": hashed_password,
-            "is_admin": is_admin
+            "admin": is_admin
         }
         result = supabase.table('users').insert(data).execute()
         return True
@@ -412,7 +412,7 @@ if not st.session_state.logged_in:
                     if verify_password(stored_password, password):
                         st.session_state.logged_in = True
                         st.session_state.user_email = email
-                        st.session_state.is_admin = user.get('is_admin', False) or (email in ADMIN_EMAILS)
+                        st.session_state.is_admin = user.get('admin', False) or (email in ADMIN_EMAILS)
                         st.rerun()
                     else:
                         st.error("Invalid password")
@@ -1043,12 +1043,12 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
     with tab1:
         st.markdown("#### All Registered Users")
         try:
-            result = supabase.table('users').select("email, name, is_admin").execute()
+            result = supabase.table('users').select("email, name, admin").execute()
             users = result.data if result.data else []
             
             if users:
                 df = pd.DataFrame(users)
-                df['is_admin'] = df['is_admin'].map({True: 'Admin', False: 'User', None: 'User'})
+                df['admin'] = df['admin'].map({True: 'Admin', False: 'User', None: 'User'})
                 df.columns = ['Email', 'Name', 'Admin Status']
                 st.dataframe(df, use_container_width=True)
                 st.caption(f"Total users: {len(users)}")
@@ -1063,7 +1063,7 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
         with col_manage1:
             st.markdown("#### Grant Admin Access")
             try:
-                result = supabase.table('users').select("email, name").eq('is_admin', False).execute()
+                result = supabase.table('users').select("email, name").eq('admin', False).execute()
                 regular_users = result.data if result.data else []
                 
                 if regular_users:
@@ -1073,7 +1073,7 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
                     selected_email = regular_users[selected_user_idx]['email']
                     
                     if st.button("Grant Admin Access", use_container_width=True, type="primary"):
-                        supabase.table('users').update({"is_admin": True}).eq('email', selected_email).execute()
+                        supabase.table('users').update({"admin": True}).eq('email', selected_email).execute()
                         st.success(f"{selected_email} is now an admin!")
                         st.rerun()
                 else:
