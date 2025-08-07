@@ -361,6 +361,8 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user_email" not in st.session_state:
     st.session_state.user_email = None
+if "user_name" not in st.session_state:
+    st.session_state.user_name = None
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 if "query_count" not in st.session_state:
@@ -466,7 +468,7 @@ with st.sidebar:
     st.markdown(f"""
     <div class="status-card">
         <h3>Welcome</h3>
-        <p><strong>{st.session_state.user_email}</strong></p>
+        <p><strong>{st.session_state.user_name}</strong></p>
         <p>{"Admin Account" if st.session_state.is_admin else "Standard User"}</p>
     </div>
     """, unsafe_allow_html=True)
