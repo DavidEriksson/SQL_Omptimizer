@@ -23,7 +23,7 @@ supabase: Client = init_supabase()
 
 # === Page Configuration ===
 st.set_page_config(
-    page_title="SQL Optimizer AI",
+    page_title="SQL Optimizer",
     page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -381,6 +381,27 @@ if "cached_analytics" not in st.session_state:
 
 # === Header ===
 st.markdown("""
+<style>
+    .main-header {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        padding: 0.5rem 0;  /* reduced top and bottom padding */
+        margin: -1rem -1rem 1rem -1rem;
+        text-align: center;
+        color: white;
+        border-radius: 0 0 20px 20px;
+    }
+
+    .main-header h1 {
+        font-size: 1.5rem;  /* smaller title */
+        margin: 0.2rem 0;
+    }
+
+    .main-header p {
+        font-size: 0.9rem;  /* smaller subtitle */
+        margin: 0.2rem 0;
+    }
+</style>
+
 <div class="main-header">
     <h1>SQL Optimizer AI</h1>
     <p>Analyze, optimize, and understand your SQL queries with AI-powered insights</p>
@@ -1185,7 +1206,5 @@ elif st.session_state.current_page == "Users" and st.session_state.is_admin:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; padding: 2rem 0;">
-    <p>SQL Optimizer AI - Powered by GPT-4o Mini</p>
-    <p>Built with Streamlit | Database by Supabase</p>
 </div>
 """, unsafe_allow_html=True)
