@@ -31,6 +31,11 @@ def render_sidebar():
             st.session_state.current_page = "Optimizer"
             st.rerun()
         
+        if st.button("Natural Language", key="nav_natural", use_container_width=True,
+                     type="primary" if st.session_state.current_page == "Natural Language" else "secondary"):
+            st.session_state.current_page = "Natural Language"
+            st.rerun()
+        
         if st.button("Query History", key="nav_history", use_container_width=True,
                      type="primary" if st.session_state.current_page == "History" else "secondary"):
             st.session_state.current_page = "History"

@@ -6,15 +6,36 @@ from config import init_page_config, apply_custom_css
 from database import *
 from auth import login_page
 from components.sidebar import render_sidebar
-from views.home import home_page
-from views.optimizer import optimizer_page
-from views.history import history_page
-from views.analytics import analytics_page
-from views.users import users_page
+from pages.home import home_page
+from pages.optimizer import optimizer_page
+from pages.history import history_page
+from pages.analytics import analytics_page
+from pages.users import users_page
+from pages.natural_language import natural_language_page
 
 # === Page Configuration ===
 init_page_config()
 apply_custom_css()
+
+# Hide the default Streamlit file navigation sidebar
+st.markdown("""
+<style>
+    /* Hide the Streamlit default sidebar navigation */
+    [data-testid="stSidebarNav"] {
+        display: none;
+    }
+    
+    /* Hide the expander arrow in sidebar */
+    [data-testid="stSidebarNav"] > ul {
+        display: none;
+    }
+    
+    /* Remove extra padding when nav is hidden */
+    [data-testid="stSidebarUserContent"] {
+        padding-top: 1rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # === Session State Initialization ===
 if "logged_in" not in st.session_state:
@@ -49,9 +70,17 @@ st.markdown("""
 
 # === Main Application Flow ===
 if not st.session_state.logged_in:
+    # Don't show sidebar when not logged in
+    st.markdown("""
+    <style>
+        [data-testid="stSidebar"] {
+            display: none;
+        }
+    </style>
+    """, unsafe_allow_html=True)
     login_page()
 else:
-    # Render sidebar
+    # Render sidebar only when logged in
     render_sidebar()
     
     # Route to appropriate page
@@ -59,6 +88,8 @@ else:
         home_page()
     elif st.session_state.current_page == "Optimizer":
         optimizer_page()
+    elif st.session_state.current_page == "Natural Language":
+        natural_language_page()
     elif st.session_state.current_page == "History":
         history_page()
     elif st.session_state.current_page == "Analytics" and st.session_state.is_admin:
