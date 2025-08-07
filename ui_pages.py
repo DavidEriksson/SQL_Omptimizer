@@ -13,7 +13,7 @@ from database import (
 )
 from constants import TASK_DESCRIPTIONS, PROMPT_TEMPLATES
 
-def render_ui(conn, cursor):
+def render_ui(supabase):
     user_email = st.session_state.user_email
     is_admin = st.session_state.is_admin
 
@@ -43,11 +43,11 @@ def render_ui(conn, cursor):
         with col2:
             disabled = not is_admin and st.session_state.query_count >= 5
             if st.button("Run Analysis", disabled=disabled):
-                run_query_analysis(conn, cursor, sql_query, task)
+                run_query_analysis(supabase, sql_query, task)
 
     elif page == "History":
         st.header("Query History")
-        display_query_history(cursor, user_email)
+        display_query_history(supabase, user_email)
 
     elif page == "Analytics" and is_admin:
         st.header("Analytics Dashboard")
@@ -57,7 +57,7 @@ def render_ui(conn, cursor):
         st.header("User Management")
         st.info("User management will be implemented here.")
 
-def run_query_analysis(conn, cursor, sql_query, task):
+def run_query_analysis(supabase, sql_query, task):
     if not sql_query.strip():
         st.warning("SQL query is empty.")
         return
@@ -75,20 +75,20 @@ def run_query_analysis(conn, cursor, sql_query, task):
         )
         reply = response.choices[0].message.content
 
-        log_query(cursor, conn, st.session_state.user_email, task, len(sql_query), token_estimate, success=True)
-        history_id = save_query_to_history(cursor, conn, st.session_state.user_email, sql_query, task, reply)
+        log_query(supabase, st.session_state.user_email, task, len(sql_query), token_estimate, success=True)
+        history_id = save_query_to_history(supabase, st.session_state.user_email, sql_query, task, reply)
 
         st.success("Analysis complete. Saved to history.")
         st.markdown("### Result")
         st.markdown(reply)
 
     except Exception as e:
-        log_query(cursor, conn, st.session_state.user_email, task, len(sql_query), success=False, error_message=str(e))
+        log_query(supabase, st.session_state.user_email, task, len(sql_query), success=False, error_message=str(e))
         st.error(f"Failed: {e}")
 
-def display_query_history(cursor, user_email):
-    history = get_user_query_history(cursor, user_email)
-    favorites = get_user_favorites(cursor, user_email)
+def display_query_history(supabase, user_email):
+    history = get_user_query_history(supabase, user_email)
+    favorites = get_user_favorites(supabase, user_email)
 
     tab1, tab2 = st.tabs(["Recent", "Favorites"])
 
@@ -98,7 +98,7 @@ def display_query_history(cursor, user_email):
             return
 
         for q in history:
-            query_id, query_text, task_type, result_text, is_fav, name, timestamp = q
+            query_id, query_text, task_type, result_text, is_fav, name, timestamp = q.values()
             with st.expander(f"{name or task_type} - {timestamp[:16]}"):
                 st.code(query_text)
                 if result_text:
@@ -112,11 +112,11 @@ def display_query_history(cursor, user_email):
                         st.experimental_rerun()
                 with col2:
                     if st.button("⭐" if not is_fav else "Unstar", key=f"fav_{query_id}"):
-                        toggle_favorite(cursor, conn, query_id)
+                        toggle_favorite(supabase, query_id)
                         st.experimental_rerun()
                 with col3:
                     if st.button("Delete", key=f"del_{query_id}"):
-                        delete_query_from_history(cursor, conn, query_id, user_email)
+                        delete_query_from_history(supabase, query_id, user_email)
                         st.experimental_rerun()
 
     with tab2:
@@ -125,7 +125,7 @@ def display_query_history(cursor, user_email):
             return
 
         for q in favorites:
-            query_id, query_text, task_type, result_text, name, timestamp = q
+            query_id, query_text, task_type, result_text, name, timestamp = q.values()
             with st.expander(f"⭐ {name or task_type} - {timestamp[:16]}"):
                 st.code(query_text)
                 if result_text:
@@ -133,5 +133,5 @@ def display_query_history(cursor, user_email):
 
                 new_name = st.text_input("Rename", value=name or "", key=f"rename_{query_id}")
                 if st.button("Update Name", key=f"update_{query_id}"):
-                    update_query_name(cursor, conn, query_id, user_email, new_name)
+                    update_query_name(supabase, query_id, user_email, new_name)
                     st.experimental_rerun()

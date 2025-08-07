@@ -5,7 +5,7 @@ from database import get_user, add_user, verify_password
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 ADMIN_EMAILS = st.secrets["ADMIN_EMAILS"]
 
-def handle_auth(cursor):
+def handle_auth(supabase):
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
     if "user_email" not in st.session_state:
@@ -28,14 +28,14 @@ def handle_auth(cursor):
                 login_button = st.form_submit_button("Login")
 
             if login_button:
-                user = get_user(cursor, email)
+                user = get_user(supabase, email)
                 if not user:
                     st.error("User not found.")
                 else:
-                    if verify_password(user[2], password):
+                    if verify_password(user["password"], password):
                         st.session_state.logged_in = True
                         st.session_state.user_email = email
-                        st.session_state.is_admin = bool(user[3]) or (email in ADMIN_EMAILS)
+                        st.session_state.is_admin = bool(user.get("admin")) or (email in ADMIN_EMAILS)
                         return True
                     else:
                         st.error("Invalid password")
@@ -48,11 +48,11 @@ def handle_auth(cursor):
                 register_button = st.form_submit_button("Register")
 
             if register_button:
-                if get_user(cursor, new_email):
+                if get_user(supabase, new_email):
                     st.error("Email already exists")
                 else:
                     is_admin = new_email in ADMIN_EMAILS
-                    add_user(cursor, st.connection, new_email, new_name, new_password, is_admin)
+                    add_user(supabase, new_email, new_name, new_password, is_admin)
                     st.success("Account created. Please log in.")
 
     return False
