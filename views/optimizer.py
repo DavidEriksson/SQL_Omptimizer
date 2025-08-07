@@ -28,6 +28,9 @@ def optimizer_page():
         
         st.info(task_descriptions[task])
         
+        analyze_button = st.button("Analyze Query", use_container_width=True, type="primary",
+                                  disabled=(not st.session_state.is_admin and st.session_state.query_count >= 5))
+        
         if st.button("Format SQL", use_container_width=True):
             if sql_query.strip():
                 formatted_sql = format_sql(sql_query)
@@ -36,9 +39,6 @@ def optimizer_page():
                 st.rerun()
             else:
                 st.warning("Please enter SQL code to format")
-        
-        analyze_button = st.button("Analyze Query", use_container_width=True, type="primary",
-                                  disabled=(not st.session_state.is_admin and st.session_state.query_count >= 5))
     
     st.markdown("</div>", unsafe_allow_html=True)
     
