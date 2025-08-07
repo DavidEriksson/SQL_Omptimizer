@@ -1,8 +1,6 @@
-streamlit
-numpy
-pandas
-openai
-tiktoken
-bcrypt
-supabase
-pandas
+streamlit==1.29.0
+openai==1.6.1
+tiktoken==0.5.2
+bcrypt==4.1.2
+pandas==2.1.4
+supabase==2.3.0
