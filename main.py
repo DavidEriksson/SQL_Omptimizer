@@ -6,12 +6,12 @@ from config import init_page_config, apply_custom_css
 from database import *
 from auth import login_page
 from components.sidebar import render_sidebar
-from view.home import home_page
-from view.optimizer import optimizer_page
-from view.history import history_page
-from view.analytics import analytics_page
-from view.users import users_page
-from view.natural_language import natural_language_page
+from views.home import home_page
+from views.optimizer import optimizer_page
+from views.history import history_page
+from views.analytics import analytics_page
+from views.users import users_page
+from views.natural_language import natural_language_page
 
 # === Page Configuration ===
 init_page_config()
