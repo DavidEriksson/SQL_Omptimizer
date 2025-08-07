@@ -1,6 +1,6 @@
 streamlit
 openai
-tiktoken=
+tiktoken
 bcrypt
 pandas
 supabase
