@@ -594,7 +594,7 @@ if st.session_state.current_page == "Home":
 elif st.session_state.current_page == "Optimizer":
     st.markdown("## SQL Query Optimizer")
     
-    st.markdown('<div class="query-container">', unsafe_allow_html=True)
+    #st.markdown('<div class="query-container">', unsafe_allow_html=True)
     
     col1, col2 = st.columns([3, 1])
     
