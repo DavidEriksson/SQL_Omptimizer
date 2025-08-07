@@ -114,12 +114,12 @@ def natural_language_page():
     user_schema = load_user_schema()
     
     # Schema setup section
-    with st.expander("📋 Database Schema Setup", expanded=(user_schema is None)):
+    with st.expander("Database Schema Setup", expanded=(user_schema is None)):
         setup_schema()
     
     # Display current schema if exists
     if user_schema:
-        with st.expander("📊 Current Schema", expanded=False):
+        with st.expander("Current Schema", expanded=False):
             st.code(user_schema, language="sql")
             if st.button("Clear Schema", type="secondary"):
                 clear_user_schema()
@@ -149,7 +149,7 @@ def natural_language_page():
             else:
                 st.warning("Please enter a question")
     else:
-        st.info("👆 Please set up your database schema first to start using Natural Language queries")
+        st.info("Please set up your database schema first to start using Natural Language queries")
 
 def setup_schema():
     """Schema setup interface"""
@@ -262,7 +262,7 @@ If there are any assumptions made, list them as:
 Assumptions: [list any assumptions]
 """
     
-    with st.spinner("🤔 Generating SQL query..."):
+    with st.spinner("Generating SQL query..."):
         try:
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -313,13 +313,13 @@ Assumptions: [list any assumptions]
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                if st.button("🔍 Analyze This Query", use_container_width=True):
+                if st.button("Analyze This Query", use_container_width=True):
                     st.session_state.selected_history_query = sql_query
                     st.session_state.current_page = "Optimizer"
                     st.rerun()
             
             with col2:
-                if st.button("💾 Save to History", use_container_width=True):
+                if st.button("Save to History", use_container_width=True):
                     save_query_to_history(
                         user_email=st.session_state.user_email,
                         query_text=sql_query,
@@ -331,7 +331,7 @@ Assumptions: [list any assumptions]
             
             with col3:
                 st.download_button(
-                    "📥 Download SQL",
+                    "Download SQL",
                     sql_query,
                     file_name="generated_query.sql",
                     mime="text/plain",
