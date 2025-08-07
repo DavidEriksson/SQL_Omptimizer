@@ -121,6 +121,50 @@ if "last_analytics_update" not in st.session_state:
 if "cached_analytics" not in st.session_state:
     st.session_state.cached_analytics = None
 
+# === AUTH GUARD ===
+if not st.session_state.logged_in:
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("### Welcome to SQL Optimizer")
+        auth_tab1, auth_tab2 = st.tabs(["Login", "Register"])
+
+        with auth_tab1:
+            with st.form("login_form"):
+                email = st.text_input("Email", placeholder="Enter your email")
+                password = st.text_input("Password", type="password", placeholder="Enter your password")
+                login_button = st.form_submit_button("Login", use_container_width=True)
+
+            if login_button:
+                user = get_user(email)
+                if not user:
+                    st.error("User not found. Please check your email or register.")
+                else:
+                    stored_password = user["password"]
+                    if verify_password(stored_password, password):
+                        st.session_state.logged_in = True
+                        st.session_state.user_email = email
+                        st.session_state.is_admin = user.get("admin", False) or (email in ADMIN_EMAILS)
+                        st.rerun()
+                    else:
+                        st.error("Invalid password")
+
+        with auth_tab2:
+            with st.form("register_form"):
+                new_email = st.text_input("Email", placeholder="Enter your email")
+                new_name = st.text_input("Full Name", placeholder="Enter your full name")
+                new_password = st.text_input("Password", type="password", placeholder="Create a password")
+                register_button = st.form_submit_button("Create Account", use_container_width=True)
+
+            if register_button:
+                if get_user(new_email):
+                    st.error("Email already exists")
+                else:
+                    is_admin = new_email in ADMIN_EMAILS
+                    add_user(new_email, new_name, new_password, is_admin)
+                    st.success("Account created successfully! Please log in.")
+
+    st.stop()
+
 # === UI fortsätter här ===
 # [REMAINING UI LOGIC INSERTION POINT - will be done next]
 
