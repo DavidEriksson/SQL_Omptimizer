@@ -5,3 +5,4 @@ bcrypt
 pandas
 supabase
 graphviz
+plotly

@@ -13,6 +13,7 @@ from views.analytics import analytics_page
 from views.users import users_page
 from views.natural_language import natural_language_page
 from views.execution_plan import execution_plan_page
+from views.comparison import comparison_page
 
 # === Page Configuration ===
 init_page_config()
@@ -89,6 +90,8 @@ else:
         home_page()
     elif st.session_state.current_page == "Optimizer":
         optimizer_page()
+    elif st.session_state.current_page == "Comparison":
+        comparison_page()
     elif st.session_state.current_page == "Execution Plan":
         execution_plan_page()
     elif st.session_state.current_page == "Natural Language":

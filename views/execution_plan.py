@@ -1,4 +1,4 @@
-import streamlit as st
+
 import json
 import openai
 from config import OPENAI_API_KEY
@@ -49,7 +49,7 @@ def execution_plan_page():
         generate_execution_plan(sql_query, db_type, visualization_type)
     
     # Educational content
-    with st.expander("📚 Understanding Execution Plans"):
+    with st.expander("Understanding Execution Plans"):
         show_educational_content()
 
 def generate_execution_plan(sql_query, db_type, viz_type):
@@ -99,7 +99,7 @@ Format the response as a JSON object with this structure:
 }}
 """
     
-    with st.spinner("🔍 Analyzing query execution plan..."):
+    with st.spinner("Analyzing query execution plan..."):
         try:
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -151,7 +151,7 @@ def display_execution_plan(plan, viz_type, original_query):
     
     # Summary metrics
     if 'summary' in plan:
-        st.markdown("### 📊 Execution Summary")
+        st.markdown("### Execution Summary")
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
@@ -166,12 +166,12 @@ def display_execution_plan(plan, viz_type, original_query):
     
     # Warnings
     if 'warnings' in plan and plan['warnings']:
-        st.warning("⚠️ **Potential Issues:**")
+        st.warning("**Potential Issues:**")
         for warning in plan['warnings']:
             st.write(f"• {warning}")
     
     # Visualization
-    st.markdown("### 🔄 Execution Flow")
+    st.markdown("### Execution Flow")
     
     if viz_type == "Tree View":
         display_tree_view(plan['steps'])
@@ -182,7 +182,7 @@ def display_execution_plan(plan, viz_type, original_query):
     
     # Optimization suggestions
     if 'summary' in plan and 'optimization_suggestions' in plan['summary']:
-        with st.expander("💡 Optimization Suggestions", expanded=True):
+        with st.expander("Optimization Suggestions", expanded=True):
             for i, suggestion in enumerate(plan['summary']['optimization_suggestions'], 1):
                 st.write(f"{i}. {suggestion}")
     
@@ -191,7 +191,7 @@ def display_execution_plan(plan, viz_type, original_query):
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("🔍 Optimize This Query", use_container_width=True):
+        if st.button("Optimize This Query", use_container_width=True):
             st.session_state.selected_history_query = original_query
             st.session_state.current_page = "Optimizer"
             st.rerun()
@@ -199,7 +199,7 @@ def display_execution_plan(plan, viz_type, original_query):
     with col2:
         plan_text = format_plan_as_text(plan)
         st.download_button(
-            "📥 Download Plan",
+            "Download Plan",
             plan_text,
             file_name="execution_plan.txt",
             mime="text/plain",
@@ -207,7 +207,7 @@ def display_execution_plan(plan, viz_type, original_query):
         )
     
     with col3:
-        if st.button("💾 Save to History", use_container_width=True):
+        if st.button("Save to History", use_container_width=True):
             save_query_to_history(
                 user_email=st.session_state.user_email,
                 query_text=original_query,
@@ -350,19 +350,19 @@ def get_operation_icon(operation):
     """Get icon for operation type"""
     operation_lower = operation.lower()
     if 'scan' in operation_lower:
-        return '📋'
+        return '[SCAN]'
     elif 'index' in operation_lower:
-        return '🔍'
+        return '[INDEX]'
     elif 'join' in operation_lower:
-        return '🔗'
+        return '[JOIN]'
     elif 'sort' in operation_lower:
-        return '↕️'
+        return '[SORT]'
     elif 'filter' in operation_lower or 'where' in operation_lower:
-        return '🔽'
+        return '[FILTER]'
     elif 'aggregate' in operation_lower or 'group' in operation_lower:
-        return '📊'
+        return '[AGG]'
     else:
-        return '▶️'
+        return '[OP]'
 
 def get_cost_indicator(cost):
     """Get visual indicator for cost"""
