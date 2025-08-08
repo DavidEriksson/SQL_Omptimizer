@@ -50,11 +50,6 @@ def render_sidebar():
                      type="primary" if st.session_state.current_page == "History" else "secondary"):
             st.session_state.current_page = "History"
             st.rerun()
-
-        if st.button("Comparison", key="nav_comparison", use_container_width=True,
-                     type="primary" if st.session_state.current_page == "Comparison" else "secondary"):
-            st.session_state.current_page = "Comparison"
-            st.rerun()
         
         if st.session_state.is_admin:
             if st.button("Analytics", key="nav_analytics", use_container_width=True,
