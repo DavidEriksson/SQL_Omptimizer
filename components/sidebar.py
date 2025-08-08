@@ -31,6 +31,11 @@ def render_sidebar():
             st.session_state.current_page = "Optimizer"
             st.rerun()
         
+        if st.button("Query Comparison", key="nav_comparison", use_container_width=True,
+                     type="primary" if st.session_state.current_page == "Comparison" else "secondary"):
+            st.session_state.current_page = "Comparison"
+            st.rerun()
+        
         if st.button("Execution Plan", key="nav_execution", use_container_width=True,
                      type="primary" if st.session_state.current_page == "Execution Plan" else "secondary"):
             st.session_state.current_page = "Execution Plan"
@@ -44,6 +49,11 @@ def render_sidebar():
         if st.button("Query History", key="nav_history", use_container_width=True,
                      type="primary" if st.session_state.current_page == "History" else "secondary"):
             st.session_state.current_page = "History"
+            st.rerun()
+
+        if st.button("Comparison", key="nav_comparison", use_container_width=True,
+                     type="primary" if st.session_state.current_page == "Comparison" else "secondary"):
+            st.session_state.current_page = "Comparison"
             st.rerun()
         
         if st.session_state.is_admin:
